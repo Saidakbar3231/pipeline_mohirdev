@@ -151,7 +151,14 @@ function buildParams() {
   fd.append('hf_config',      _val('hf-config'));
   fd.append('hf_split',       _val('hf-split'));
   fd.append('hf_dataset_token', _val('hf-dataset-token'));
-  fd.append('local_dir',      _val('local-dir'));
+  // Local folder: if the user picked a folder via the browser picker,
+  // upload the audio files directly (browsers can't expose absolute paths).
+  if (window._localAudioFiles && window._localAudioFiles.length > 0) {
+    window._localAudioFiles.forEach(f => fd.append('local_files', f, f.name));
+    fd.append('local_dir', '__uploaded__');  // sentinel; backend replaces with temp dir
+  } else {
+    fd.append('local_dir', _val('local-dir'));
+  }
   fd.append('dur_min',        _val('dur-min'));
   fd.append('dur_max',        _val('dur-max'));
   fd.append('noise_reduce',   _checked('noise-reduce', true));
@@ -219,8 +226,10 @@ function _validatePipelineInputs() {
     const jf = _get('json-file');
     if (!jf || !jf.files || !jf.files[0]) { alert(T('alert_jsonfile')); return false; }
   }
-  if (source === 'Local papka' && !(_val('local-dir') || '').trim()) {
-    alert(T('alert_localdir')); return false;
+  if (source === 'Local papka') {
+    const hasUpload = window._localAudioFiles && window._localAudioFiles.length > 0;
+    const hasPath   = (_val('local-dir') || '').trim();
+    if (!hasUpload && !hasPath) { alert(T('alert_localdir')); return false; }
   }
   return true;
 }
@@ -253,6 +262,12 @@ async function startPipeline() {
 
   try {
     const fd = buildParams();
+    // If uploading local audio files, show an interim status while bytes transfer
+    const isUploading = window._localAudioFiles && window._localAudioFiles.length > 0;
+    if (isUploading) {
+      setStatus('running', T('uploading') || 'Yuklanmoqda...');
+      _setText('progress-stage', T('uploading') || 'Yuklanmoqda...');
+    }
     const r = await fetch('/api/start', {method:'POST', body: fd});
     const d = await r.json();
     if (d.error) { alert(d.error); if (btn) btn.disabled = false; setStatus('', T('status_ready')); return; }

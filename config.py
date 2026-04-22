@@ -8,7 +8,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ─── Fine-tuned Model API (Yo'l 1) ──────────────────────────────
 STT_API_URL      = os.getenv("STT_API_URL", "https://back.aisha.group/api/v2/stt/post/")
-STT_API_KEY      = os.getenv("STT_API_KEY", "")
+STT_API_KEY      = os.getenv("STT_API_KEY", "AIzaSyD_Lq-qNI15Hhe1M-ck21VgEkfNKgCTaxxE")
 STT_LANGUAGE     = "uz"
 # API formati: "openai" yoki "custom"
 STT_API_FORMAT   = "custom"

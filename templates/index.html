@@ -175,14 +175,14 @@
 
   <div id="src-local">
     <div class="field">
-      <label data-i18n="local_title">Papka tanlang</label>
+      <label data-i18n="local_title">Audio fayllarni tanlang</label>
       <div class="file-drop file-drop--folder" id="local-drop" onclick="document.getElementById('local-folder-input').click()">
-        <div class="drop-icon">📁</div>
+        <div class="drop-icon">🎵</div>
         <div>
-          <div class="local-drop-label" id="local-drop-label" data-i18n="local_click">Papkani tanlash uchun bosing</div>
-          <div class="local-drop-sub" id="local-drop-sub" data-i18n="local_hint">Audio fayllar (.wav .mp3 .ogg .flac .m4a) bo'lgan papkani tanlang</div>
+          <div class="local-drop-label" id="local-drop-label" data-i18n="local_click">Audio fayllarni tanlash uchun bosing</div>
+          <div class="local-drop-sub" id="local-drop-sub" data-i18n="local_hint">Bir yoki bir nechta fayl tanlang (.wav .mp3 .ogg .flac .m4a)</div>
         </div>
-        <input type="file" id="local-folder-input" webkitdirectory mozdirectory directory multiple class="visually-hidden" onchange="onLocalFolderSelect(this)" aria-label="Papka tanlash" data-i18n-aria="local_title">
+        <input type="file" id="local-folder-input" accept=".wav,.mp3,.ogg,.flac,.m4a,audio/*" multiple class="visually-hidden" onchange="onLocalFolderSelect(this)" aria-label="Audio fayllarni tanlash" data-i18n-aria="local_title">
       </div>
       <input type="text" id="local-dir" style="display:none">
     </div>

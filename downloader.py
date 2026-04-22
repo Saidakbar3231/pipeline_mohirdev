@@ -27,15 +27,19 @@ def download_youtube(url: str, progress_cb=None,
                      run_id: str = None) -> Generator[dict, None, None]:
     """
     YouTube URL dan audio yuklab oladi.
-    Har bir run uchun alohida papka — eski fayllar aralashmaydi.
+
+    Optional: agar loyiha ildizida 'cookies.txt' mavjud bo'lsa,
+    authenticated quota uchun ishlatiladi (429 bypass).
+    Brauzer cookies avtomatik ishlatilmaydi (Windows DPAPI muammosi).
     """
     from datetime import datetime
+
     rid     = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = os.path.join(DOWNLOAD_DIR, "youtube", rid)
     os.makedirs(out_dir, exist_ok=True)
 
     if shutil.which("yt-dlp") is None:
-        raise RuntimeError("yt-dlp topilmadi. O'rnatish: pip install yt-dlp")
+        raise RuntimeError("yt-dlp topilmadi. O'rnatish: pip install -U yt-dlp")
 
     template = os.path.join(out_dir, "%(id)s.%(ext)s")
 
@@ -46,9 +50,27 @@ def download_youtube(url: str, progress_cb=None,
         "--audio-quality", "0",
         "--postprocessor-args", f"-ar {SAMPLE_RATE} -ac 1",
         "--output", template,
+        # Non-JS clients — don't need a JS runtime
+        "--extractor-args", "youtube:player_client=default,tv,ios,android_vr",
+        # Modern UA to avoid naive bot checks
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Retry on transient errors
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--retry-sleep", "5",
         "--no-playlist" if "list=" not in url else "--yes-playlist",
-        url
     ]
+
+    # Optional cookies.txt — if user exported it manually
+    cookies_txt = os.path.abspath("cookies.txt")
+    if os.path.exists(cookies_txt):
+        cmd[1:1] = ["--cookies", cookies_txt]
+        if progress_cb:
+            progress_cb(f"🔐 cookies.txt topildi — authenticated yuklash")
+
+    cmd.append(url)
 
     if progress_cb:
         progress_cb(f"YouTube yuklanmoqda: {url}")
@@ -56,10 +78,40 @@ def download_youtube(url: str, progress_cb=None,
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        raise RuntimeError(f"yt-dlp xato: {result.stderr[:300]}")
+        stderr = result.stderr or ""
+        s = stderr.lower()
+        # Classified, friendly error messages
+        if "429" in stderr or "too many requests" in s:
+            raise RuntimeError(
+                "YouTube rate-limit (HTTP 429). IP vaqtincha bloklangan.\n"
+                "Yechimlar:\n"
+                "  • 30–60 daqiqa kutib qayta urinib ko'ring\n"
+                "  • VPN yoki mobil hotspot orqali boshqa IP ishlating\n"
+                "  • cookies.txt faylini loyiha ildiziga joylashtiring "
+                "(Chrome extension: 'Get cookies.txt LOCALLY')"
+            )
+        if "no supported javascript" in s or "javascript runtime" in s:
+            raise RuntimeError(
+                "yt-dlp JavaScript runtime talab qiladi.\n"
+                "  1) Node.js o'rnating: https://nodejs.org (LTS)\n"
+                "  2) yt-dlp ni yangilang: pip install -U yt-dlp"
+            )
+        if "sign in to confirm" in s or "age-restricted" in s:
+            raise RuntimeError(
+                "Video yoshga cheklangan. cookies.txt fayli kerak bo'ladi."
+            )
+        if "video unavailable" in s or "private video" in s:
+            raise RuntimeError("Video mavjud emas yoki mintaqaviy cheklangan.")
+        if "members-only" in s:
+            raise RuntimeError("Bu video faqat a'zolar uchun (members-only).")
+        raise RuntimeError(f"yt-dlp xato: {stderr[:400]}")
 
-    # Faqat bu papkadagi fayllarni qaytaramiz — boshqa hech narsa yo'q
-    for f in sorted(Path(out_dir).glob("*.wav")):
+    files = sorted(Path(out_dir).glob("*.wav"))
+    if not files:
+        raise RuntimeError(
+            "yt-dlp muvaffaqiyat qaytardi, lekin WAV fayl yaratilmadi."
+        )
+    for f in files:
         yield {
             "file":       str(f),
             "source":     "youtube",

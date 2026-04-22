@@ -130,9 +130,10 @@ var LANG = {
     hf_token_label: "HuggingFace Token",
     hf_token_private: "(private dataset uchun)",
     hf_token_ph: "hf_xxxx... (public uchun bo'sh qoldiring)",
-    local_title: "Papka tanlang",
-    local_click: "Papkani tanlash uchun bosing",
-    local_hint: "Audio fayllar (.wav .mp3 .ogg .flac .m4a) bo'lgan papkani tanlang",
+    local_title: "Audio fayllarni tanlang",
+    local_click: "Audio fayllarni tanlash uchun bosing",
+    local_hint: "Bir yoki bir nechta fayl tanlang (.wav .mp3 .ogg .flac .m4a)",
+    uploading: "Audio fayllar yuklanmoqda...",
     // Tab 2
     filter_title: "Shovqin Kamaytirish",
     nr_label: "Noise Reduction",
@@ -346,9 +347,10 @@ var LANG = {
     hf_token_label: "HuggingFace Token",
     hf_token_private: "(для приватного датасета)",
     hf_token_ph: "hf_xxxx... (для публичного оставьте пустым)",
-    local_title: "Выберите папку",
-    local_click: "Нажмите, чтобы выбрать папку",
-    local_hint: "Выберите папку с аудиофайлами (.wav .mp3 .ogg .flac .m4a)",
+    local_title: "Выберите аудио файлы",
+    local_click: "Нажмите, чтобы выбрать аудиофайлы",
+    local_hint: "Выберите один или несколько файлов (.wav .mp3 .ogg .flac .m4a)",
+    uploading: "Аудиофайлы загружаются...",
     filter_title: "Шумоподавление",
     nr_label: "Noise Reduction",
     nr_desc: "Уменьшает фоновый шум в каждом аудио сегменте",
@@ -554,9 +556,10 @@ var LANG = {
     hf_token_label: "HuggingFace Token",
     hf_token_private: "(for private dataset)",
     hf_token_ph: "hf_xxxx... (leave empty for public)",
-    local_title: "Select Folder",
-    local_click: "Click to select folder",
-    local_hint: "Select a folder with audio files (.wav .mp3 .ogg .flac .m4a)",
+    local_title: "Select audio files",
+    local_click: "Click to select audio files",
+    local_hint: "Pick one or more files (.wav .mp3 .ogg .flac .m4a)",
+    uploading: "Uploading audio files...",
     filter_title: "Noise Reduction",
     nr_label: "Noise Reduction",
     nr_desc: "Reduces background noise from each audio segment",
@@ -803,23 +806,60 @@ function setLang(lang) {
 }
 
 // ─────────────────────────────────────────────
-// LOCAL FOLDER SELECT
+// LOCAL AUDIO FILE SELECT
+// Works for both:
+//   - individual file picks (Ctrl+click multi-select in dialog)
+//   - whole folders (if input has webkitdirectory)
+// Collects valid audio files → uploaded on Start.
 // ─────────────────────────────────────────────
 function onLocalFolderSelect(inp) {
   if (!inp.files || inp.files.length === 0) return;
-  const firstFile = inp.files[0];
-  const fullPath = firstFile.webkitRelativePath || firstFile.name;
-  const folderName = fullPath.includes('/') ? fullPath.split('/')[0] : fullPath;
+
   const audioExts = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
   const audioFiles = Array.from(inp.files).filter(f =>
     audioExts.some(ext => f.name.toLowerCase().endsWith(ext))
   );
-  document.getElementById('local-drop-label').textContent = `📁 ${folderName}`;
-  document.getElementById('local-drop-sub').textContent =
-    `${audioFiles.length} ${T('folder_found')}`;
-  document.getElementById('local-drop').style.borderColor = 'var(--p)';
-  document.getElementById('local-dir').value = folderName;
+
+  const label = document.getElementById('local-drop-label');
+  const sub   = document.getElementById('local-drop-sub');
+  const drop  = document.getElementById('local-drop');
+  const dir   = document.getElementById('local-dir');
+
+  // Folder name detection (works for webkitdirectory mode)
+  const firstFile  = inp.files[0];
+  const relPath    = firstFile.webkitRelativePath || '';
+  const folderName = relPath.includes('/') ? relPath.split('/')[0] : '';
+
+  if (audioFiles.length === 0) {
+    // Nothing usable — warn clearly
+    const picked = folderName || (inp.files.length + ' ta fayl');
+    if (label) label.textContent = `⚠️ ${picked} — audio fayl topilmadi`;
+    if (sub)   sub.textContent   = `Qo'llab-quvvatlanadigan formatlar: .wav .mp3 .ogg .flac .m4a`;
+    if (drop)  drop.style.borderColor = 'var(--warning)';
+    window._localAudioFiles = null;
+    if (dir) dir.value = '';
+    return;
+  }
+
+  // Build summary
+  const totalBytes = audioFiles.reduce((s, f) => s + (f.size || 0), 0);
+  const mb         = (totalBytes / 1024 / 1024).toFixed(1);
+  const firstFew   = audioFiles.slice(0, 3).map(f => f.name).join(', ');
+  const more       = audioFiles.length > 3 ? `, +${audioFiles.length - 3} ta…` : '';
+  const title      = folderName
+    ? `📁 ${folderName}  ·  ${audioFiles.length} ta audio  ·  ${mb} MB`
+    : `🎵 ${audioFiles.length} ta audio  ·  ${mb} MB`;
+
+  if (label) label.textContent = title;
+  if (sub)   sub.textContent   = firstFew + more;
+  if (drop)  drop.style.borderColor = 'var(--p)';
+  if (dir && !dir.value.trim()) dir.value = folderName || 'selected_files';
   window._localAudioFiles = audioFiles;
+
+  // Warn if near upload limit
+  if (totalBytes > 1.8 * 1024 * 1024 * 1024) {
+    toast(`Jami ${mb} MB — 2 GB chegarasidan yuqori. Kamroq fayl tanlang.`, 'warning', 6000);
+  }
 }
 
 // ─────────────────────────────────────────────

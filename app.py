@@ -25,12 +25,11 @@ from config import (
 
 app = Flask(__name__)
 app.register_blueprint(extensions_bp)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
-app.secret_key = os.getenv("APP_SECRET_KEY", "change-me-please")
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2 GB (folder uploads)
+app.secret_key = os.getenv("APP_SECRET_KEY", "aisha-pipeline-secret-2026")
 
 # ── PAROL HIMOYASI ─────────────────────────────────────────────
-# Set via env: ACCESS_PASSWORD=yourpassword
-ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "aisha2026")
+ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "aisha2026")   # ← bu yerni o'zgartiring
 # ──────────────────────────────────────────────────────────────
 
 UPLOAD_TMP = "uploads_tmp"
@@ -724,6 +723,15 @@ def index():
     return render_template('index.html')
 
 
+@app.errorhandler(413)
+def _payload_too_large(e):
+    limit_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    return jsonify({
+        "error": f"Yuklangan fayllar hajmi {limit_mb} MB chegarasidan oshib ketdi. "
+                 f"Kamroq fayl tanlang yoki serverning MAX_CONTENT_LENGTH sozlamasini oshiring."
+    }), 413
+
+
 @app.route('/api/start', methods=['POST'])
 def api_start():
     if _state["running"]:
@@ -758,6 +766,35 @@ def api_start():
             save_path = os.path.join(UPLOAD_TMP, f.filename)
             f.save(save_path)
             json_file_path = save_path
+
+    # Local folder picker: browser cannot expose absolute paths, so it sends
+    # the audio files themselves. Save them to a fresh temp directory and
+    # treat that as the local_dir for the pipeline.
+    local_files = request.files.getlist('local_files')
+    if local_files:
+        import tempfile
+        tmp_dir = tempfile.mkdtemp(prefix='local_upload_', dir=UPLOAD_TMP)
+        saved = 0
+        skipped = 0
+        for f in local_files:
+            if not f or not f.filename:
+                skipped += 1
+                continue
+            name = os.path.basename(f.filename)
+            if not name.lower().endswith((".wav", ".mp3", ".ogg", ".flac", ".m4a")):
+                skipped += 1
+                continue
+            f.save(os.path.join(tmp_dir, name))
+            saved += 1
+        print(f"[api_start] Uploaded local folder: {saved} audio saved, {skipped} skipped → {tmp_dir}")
+        if saved > 0:
+            params['local_dir'] = tmp_dir
+        else:
+            # All uploaded files were rejected — surface a clear error
+            return jsonify({
+                "error": "Yuklangan faylllar ichida qo'llab-quvvatlanadigan audio topilmadi "
+                         "(.wav .mp3 .ogg .flac .m4a)."
+            }), 400
 
     _run_pipeline(params, json_file_path)
     return jsonify({"status": "started"})
