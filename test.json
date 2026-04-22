@@ -1,0 +1,309 @@
+[
+  {
+    "id": 541554,
+    "audio_url": "https://safar.bitrix24.kz/rest/71470/7fgsf22nbejuubea/download/?token=disk%7CaWQ9Mzc2NzYyJl89QVFselhVM3k1UFlZRGNOOUxzZ3BFZVJ2VmhoMVVZTVY%3D%7CImRvd25sb2FkfGRpc2t8YVdROU16YzJOell5Smw4OVFWRnNlbGhWTTNrMVVGbFpSR05PT1V4elozQkZaVkoyVm1ob01WVlpUVlk9fDcxNDcwfDdmZ3NmMjJuYmVqdXViZWEi.sQe0i8PYASfh6tMfVpr2elyFpP6wZkK43%2FlUyw2Br9w%3D",
+    "diarization": [
+      {
+        "end": 2.169,
+        "text": "Assalomu alaykum.",
+        "start": 0.999,
+        "speaker": "Operator"
+      },
+      {
+        "end": 4.939,
+        "text": "Assalomu alaykum, vaalaykum assalom.",
+        "start": 3.049,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 10.519,
+        "text": "Safar Travel Umra ziyorat markazidan aloqaga chiqyotgandim. Umra ziyorati bo'yicha qiziqish bildirganmidingiz?",
+        "start": 5.349,
+        "speaker": "Operator"
+      },
+      {
+        "end": 11.759,
+        "text": "Ha, shunday.",
+        "start": 10.979,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 15.539,
+        "text": "Qaysi sanalarga va necha kunlik paket qidirayotgandingiz?",
+        "start": 12.169,
+        "speaker": "Operator"
+      },
+      {
+        "end": 20.949,
+        "text": "Bizlar uydagilarimiz uchun qidirayotgan edim.",
+        "start": 16.489,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 24.239,
+        "text": "Ramazon oyining oxirgi o'n kunligiga kerak edi-da.",
+        "start": 21.659,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 29.289,
+        "text": "Xo'p, Ramazon oyining oxirgi 10 kunligiga bizda yetti kunlik va 14 kunlik paketlarimiz bor.",
+        "start": 24.719,
+        "speaker": "Operator"
+      },
+      {
+        "end": 32.099,
+        "text": "14 kunlik kerak edi.",
+        "start": 30.939,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 34.299,
+        "text": "Xo'p, qayerdan aloqaga chiqyotgandingiz?",
+        "start": 32.339,
+        "speaker": "Operator"
+      },
+      {
+        "end": 35.599,
+        "text": "Qarshidan.",
+        "start": 34.849,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 36.179,
+        "text": "hm.",
+        "start": 35.799,
+        "speaker": "Operator"
+      },
+      {
+        "end": 46.439,
+        "text": "Xo'p, 14 kunligimiz, sizga aynan qaysi sanadan ko'rib bersam bo'ladi? Bizda beshinchi, sakkizinchi, to'qqizinchi, 15 va 16-martdan boshlanadiganlari bor.",
+        "start": 36.729,
+        "speaker": "Operator"
+      },
+      {
+        "end": 52.489,
+        "text": "To'qqizlar ma'qul-da, chunki Laylatul Qadr kunlari o'sha paytga bo'lishini xohlashardi-da.",
+        "start": 48.099,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 59.819,
+        "text": "To'qqizinchi martdan boshlanadigan 14 kunlik paketimiz narxi 1750 dollardan boshlanadi, to'rt kishilik xona hisobida.",
+        "start": 52.889,
+        "speaker": "Operator"
+      },
+      {
+        "end": 102.399,
+        "text": "1750 dollar?",
+        "start": 100.839,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 103.009,
+        "text": "Mhm.",
+        "start": 102.669,
+        "speaker": "Operator"
+      },
+      {
+        "end": 109.619,
+        "text": "Agar bu kishilar soni oshsa, ya'ni bitta oiladan ko'pchilik borsa, bu narxga ta'sir qiladimi, yo'qmi?",
+        "start": 104.599,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 119.349,
+        "text": "Uni narxidan o'tib bera olishligiga ko'pchilik bo'lsalaringiz, menejerlarimiz bilan gaplashib ko'rish kerak-da. Ofisimizga kelib keta olasizmi, yo'qmi?",
+        "start": 111.029,
+        "speaker": "Operator"
+      },
+      {
+        "end": 123.019,
+        "text": "Qashqadaryodanman dedingizmi?",
+        "start": 121.329,
+        "speaker": "Operator"
+      },
+      {
+        "end": 123.869,
+        "text": "Ha, shunday.",
+        "start": 123.239,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 124.729,
+        "text": "Ha.",
+        "start": 124.409,
+        "speaker": "Operator"
+      },
+      {
+        "end": 136.819,
+        "text": "Necha kishi bo'layotgandi, primerno xona joylashuvini ham ko'rib bering, chunki joylarimizni bunda pochti yarmidan ko'pi to'la bo'lgan ekanda. Shunga qarab ko'rib berardim.",
+        "start": 126.139,
+        "speaker": "Operator"
+      },
+      {
+        "end": 143.719,
+        "text": "Ikki kishilik xonalarimiz to'lgan ekan, bitta uch kishilik xonamizda, keyin to'rt kishilik xonalarimizda joy bor ekan.",
+        "start": 137.899,
+        "speaker": "Operator"
+      },
+      {
+        "end": 148.459,
+        "text": "Qarang, to'rtta ayol kishi bo'ladi, ya'ni xolalarim boradi.",
+        "start": 144.209,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 150.609,
+        "text": "Keyin ukam boradi.",
+        "start": 148.979,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 152.549,
+        "text": "Besh kishi, to'g'rimi?",
+        "start": 151.059,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 155.779,
+        "text": "Keyin yana bir kishi bo'lishi mumkin, plyus-minusi bor-da.",
+        "start": 152.549,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 157.779,
+        "text": "Bir kishi boradi, qo'shiladi yoki yo'q.",
+        "start": 156.039,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 207.039,
+        "text": "Xolalaringizlar shu to'rt kishilik xonalik joylashuv bo'lsa, qolgan yana ikkita bola bo'ladigan bo'lsa, ular erkaklar jamoasida to'rt kishilik xonada qolishadi-da.",
+        "start": 157.779,
+        "speaker": "Operator"
+      },
+      {
+        "end": 214.639,
+        "text": "Xo'p, u narxlarini primerno o'zi necha pul atrofida qidirayotgandingiz?",
+        "start": 208.799,
+        "speaker": "Operator"
+      },
+      {
+        "end": 218.429,
+        "text": "Biz ham bir qidirib yurgan paytimizda",
+        "start": 215.829,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 219.469,
+        "text": "O'z",
+        "start": 218.919,
+        "speaker": "Operator"
+      }
+    ]
+  },
+  {
+    "id": 499563,
+    "audio_url": "https://safar.bitrix24.kz/rest/71470/7fgsf22nbejuubea/download/?token=disk%7CaWQ9MzU5MzY0Jl89MlBiNlJMWW44Nlp5Sk10TzZ5MXlqZVpZZUowMURTbVE%3D%7CImRvd25sb2FkfGRpc2t8YVdROU16VTVNelkwSmw4OU1sQmlObEpNV1c0NE5scDVTazEwVHpaNU1YbHFaVnBaWlVvd01VUlRiVkU9fDcxNDcwfDdmZ3NmMjJuYmVqdXViZWEi.H4X6udrZiioY3MdWErW1f20NDvOT1uoqQ4wZ6SpGNXE%3D",
+    "diarization": [
+      {
+        "end": 3.32,
+        "text": "Alo, assalomu alaykum.",
+        "start": 2.22,
+        "speaker": "Operator"
+      },
+      {
+        "end": 5.25,
+        "text": "Vaalaykum assalom.",
+        "start": 4.14,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 8.35,
+        "text": "Safar Travel umra ziyoratlaridan aloqaga chiqyabman, aka.",
+        "start": 5.76,
+        "speaker": "Operator"
+      },
+      {
+        "end": 9.07,
+        "text": "Ha?",
+        "start": 8.78,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 11.08,
+        "text": "Bezovta qilib qo'ymadimmi?",
+        "start": 9.87,
+        "speaker": "Operator"
+      },
+      {
+        "end": 12.56,
+        "text": "Yo'q, yo'q, kim bu?",
+        "start": 11.37,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 18.23,
+        "text": "Safar Travel umra ziyoratlaridan aloqaga chiqyabman, aka. Bizga qiziqish bildirib raqam qoldirganmidingiz?",
+        "start": 13.56,
+        "speaker": "Operator"
+      },
+      {
+        "end": 21.43,
+        "text": "Qanaqa raqam?",
+        "start": 20.37,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 24.37,
+        "text": "Instaga qiziqish bildirib raqamda.",
+        "start": 22.37,
+        "speaker": "Operator"
+      },
+      {
+        "end": 28.53,
+        "text": "Boshqattan ayting, yaxshi eshitilmadi. Odam",
+        "start": 26.31,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 31.63,
+        "text": "Safar Safar Travel umra ziyoratlaridan aloqaga chiqyabman, aka.",
+        "start": 28.61,
+        "speaker": "Operator"
+      },
+      {
+        "end": 35.63,
+        "text": "Umraga jo'natadigan yo'nalish bo'yicha turagentstvodan.",
+        "start": 32.84,
+        "speaker": "Operator"
+      },
+      {
+        "end": 38.07,
+        "text": "Yo'q, yo'q.",
+        "start": 36.98,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 41.34,
+        "text": "Ha, uzr, uzr, opo unda. Aka, uzr.",
+        "start": 38.86,
+        "speaker": "Operator"
+      },
+      {
+        "end": 49.88,
+        "text": "[SHOVQIN]",
+        "start": 41.56,
+        "speaker": "Mijoz"
+      },
+      {
+        "end": 53.3,
+        "text": "Safar Travel xizmatlarini birdan beshgacha baholang.",
+        "start": 50.04,
+        "speaker": "Operator"
+      }
+    ],
+    "duration": 64.44
+  }
+]

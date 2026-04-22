@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MohirDev Pipeline — Kirish</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    min-height:100vh;
+    font-family:'Syne',sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    background:#0E0F1A;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 20% 0%,rgba(79,99,240,.18) 0%,transparent 55%),
+      radial-gradient(ellipse 60% 70% at 85% 95%,rgba(120,80,255,.12) 0%,transparent 55%);
+  }
+  body::before{
+    content:'';position:fixed;inset:0;pointer-events:none;
+    background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:28px 28px;
+  }
+  .card{
+    position:relative;z-index:1;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);
+    backdrop-filter:blur(20px);
+    border-radius:20px;
+    padding:44px 40px;
+    width:100%;max-width:400px;
+    box-shadow:0 8px 40px rgba(0,0,0,.4);
+  }
+  .logo-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:32px;gap:12px;}
+  .logo-wrap img{width:64px;height:64px;border-radius:16px;
+    box-shadow:0 0 0 2px rgba(79,99,240,.4),0 4px 20px rgba(79,99,240,.35);}
+  .brand{font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:-.02em;}
+  .brand span{color:#4F63F0;}
+  .subtitle{font-size:.78rem;color:rgba(255,255,255,.4);letter-spacing:.08em;text-transform:uppercase;}
+  label{display:block;font-size:.68rem;font-weight:700;color:rgba(255,255,255,.45);
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;}
+  .input-wrap{position:relative;margin-bottom:20px;}
+  input[type=password]{
+    width:100%;padding:12px 16px;
+    background:rgba(255,255,255,.07);
+    border:1.5px solid rgba(255,255,255,.12);
+    border-radius:10px;
+    color:#fff;font-family:'Syne',sans-serif;font-size:.9rem;
+    outline:none;transition:.18s;
+    caret-color:#4F63F0;
+  }
+  input[type=password]:focus{border-color:#4F63F0;box-shadow:0 0 0 3px rgba(79,99,240,.18);background:rgba(255,255,255,.1);}
+  input[type=password]::placeholder{color:rgba(255,255,255,.25);}
+  button{
+    width:100%;padding:13px;
+    background:linear-gradient(135deg,#3B4FD8,#4F63F0);
+    color:#fff;border:none;border-radius:10px;
+    font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700;
+    letter-spacing:.05em;cursor:pointer;
+    box-shadow:0 4px 18px rgba(79,99,240,.35);
+    transition:all .18s;
+  }
+  button:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(79,99,240,.5);}
+  button:active{transform:translateY(0);}
+  .err{margin-top:14px;padding:10px 14px;
+    background:rgba(196,32,60,.12);border:1px solid rgba(196,32,60,.3);
+    border-radius:8px;color:#ff6b85;font-size:.78rem;text-align:center;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-wrap">
+    <img src="/static/img/logo.png" alt="MohirDev">
+    <div>
+      <div class="brand"><span>Mohir</span>Dev Pipeline</div>
+      <div class="subtitle" style="text-align:center;margin-top:4px;">Speech Dataset Tool</div>
+    </div>
+  </div>
+  <form method="post">
+    <label>Parol</label>
+    <div class="input-wrap">
+      <input type="password" name="password" placeholder="Parolni kiriting..." autofocus>
+    </div>
+    <button type="submit">Tizimga kirish &rarr;</button>
+    {{ err_html | safe }}
+  </form>
+</div>
+</body>
+</html>

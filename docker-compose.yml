@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  aisha-pipeline:
+    build: .
+    container_name: aisha-pipeline
+    ports:
+      - "7861:7861"
+    volumes:
+      # outputs, downloads, segments — host mashinada saqlanadi
+      - ./outputs:/app/outputs
+      - ./downloads:/app/downloads
+      - ./segments:/app/segments
+    environment:
+      # API keylarni .env faylga yozing (ixtiyoriy)
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - STT_API_KEY=${STT_API_KEY:-}
+    restart: unless-stopped

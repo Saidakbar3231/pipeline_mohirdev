@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MohirDev Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+
+<!-- ════════════════ SIDEBAR ════════════════ -->
+<div class="tabs-wrap"><div class="tab-nav">
+  <div class="sidebar-logo">
+    <img class="sidebar-logo-img" src="/static/img/logo.png" alt="MohirDev">
+    <div class="sidebar-brand"><span>Mohir</span>Dev</div>
+  </div>
+  <div class="tab-nav-scroll">
+    <button class="tab-btn active" onclick="switchTab(0)" data-i18n="tab_1">1 · Pipeline va Manba</button>
+    <button class="tab-btn" onclick="switchTab(1)" data-i18n="tab_2">2 · Filtrlar</button>
+    <button class="tab-btn" onclick="switchTab(2)" data-i18n="tab_3">3 · Natija Formati</button>
+    <button class="tab-btn" onclick="switchTab(3)" data-i18n="tab_4">4 · Ishga tushur</button>
+    <button class="tab-btn" onclick="switchTab(4)" data-i18n="tab_5">5 · HuggingFace Push</button>
+    <button class="tab-btn" onclick="switchTab(5)" data-i18n="tab_6">6 · Augmentation</button>
+    <button class="tab-btn" onclick="switchTab(6)" data-i18n="tab_7">7 · Mapping</button>
+    <button class="tab-btn" onclick="switchTab(7)" data-i18n="tab_8">8 · Training</button>
+  </div>
+  <div class="sidebar-bottom">
+    <button class="sb-icon-btn danger" onclick="location.href='/logout'" id="logout-btn" data-i18n-title="logout" title="Chiqish">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+    <button class="sb-icon-btn" onclick="toggleTheme()" id="theme-btn" title="Dark/Light">
+      <span id="theme-icon">🌙</span>
+    </button>
+    <div class="lang-wrap">
+      <button class="lang-trigger" onclick="toggleLangDropdown()" id="lang-trigger">
+        <span class="lang-flag" id="lang-flag"><svg width="18" height="12" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg" style="border-radius:2px;display:block"><rect width="20" height="4.67" fill="#0099B5"/><rect y="4.67" width="20" height="4.67" fill="#FFFFFF"/><rect y="9.33" width="20" height="4.67" fill="#1EB53A"/><rect y="4.27" width="20" height="0.8" fill="#CE1126"/><rect y="8.93" width="20" height="0.8" fill="#CE1126"/><circle cx="3.2" cy="2.33" r="1.5" fill="#FFFFFF"/><circle cx="3.9" cy="2.33" r="1.5" fill="#0099B5"/></svg></span>
+        <span id="lang-name">O'zbek</span>
+        <span class="arrow">▲</span>
+      </button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Language dropdown (fixed portal) -->
+<div class="lang-dropdown" id="lang-dropdown">
+  <button class="lang-option active" id="lang-uz" onclick="setLang('uz')">
+    <span class="lf"><svg width="18" height="12" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="4.67" fill="#0099B5"/><rect y="4.67" width="20" height="4.67" fill="#FFFFFF"/><rect y="9.33" width="20" height="4.67" fill="#1EB53A"/><rect y="4.27" width="20" height="0.8" fill="#CE1126"/><rect y="8.93" width="20" height="0.8" fill="#CE1126"/></svg></span>
+    O'zbek <span class="check">✓</span>
+  </button>
+  <button class="lang-option" id="lang-ru" onclick="setLang('ru')">
+    <span class="lf"><svg width="18" height="12" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="4.67" fill="#fff"/><rect y="4.67" width="20" height="4.67" fill="#0039A6"/><rect y="9.33" width="20" height="4.67" fill="#D52B1E"/></svg></span>
+    Русский <span class="check">✓</span>
+  </button>
+  <button class="lang-option" id="lang-en" onclick="setLang('en')">
+    <span class="lf"><svg width="18" height="12" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="14" fill="#012169"/><path d="M0 0L20 14M20 0L0 14" stroke="#fff" stroke-width="2.8"/><path d="M0 0L20 14M20 0L0 14" stroke="#C8102E" stroke-width="1.6"/><path d="M10 0V14M0 7H20" stroke="#fff" stroke-width="4"/><path d="M10 0V14M0 7H20" stroke="#C8102E" stroke-width="2.4"/></svg></span>
+    English <span class="check">✓</span>
+  </button>
+</div>
+
+<!-- ════════════════ MAIN CONTENT ════════════════ -->
+<div class="app">
+
+<div id="sticky-top">
+<div id="header">
+  <img id="logo" src="/static/img/logo.png" alt="MohirDev">
+  <div id="header-text">
+    <div id="site-title"><span>MohirDev</span> Pipeline</div>
+    <div id="site-sub" data-i18n="site_sub">Speech Dataset Tool · v2.0</div>
+  </div>
+</div>
+</div>
+
+<div class="tabs-wrap">
+
+<!-- ══ TAB 1: Pipeline & Manba ══ -->
+<div class="tab-content active">
+
+  <div class="sec-title" data-i18n="pipeline_title">Pipeline tanlang</div>
+  <div class="radio-group">
+    <div class="radio-item">
+      <input type="radio" name="pipeline" id="p1" value="Yo'l 1 — Aisha v1 Model">
+      <label class="radio-label" for="p1" data-i18n="pipeline_p1">Yo'l 1 — MohirDev API</label>
+    </div>
+    <div class="radio-item">
+      <input type="radio" name="pipeline" id="p2" value="Yo'l 2 — Aisha v2 Model" checked>
+      <label class="radio-label" for="p2" data-i18n="pipeline_p2">Yo'l 2 — Gemini STT</label>
+    </div>
+    <div class="radio-item">
+      <input type="radio" name="pipeline" id="p3" value="Yo'l 3 — Python Filter">
+      <label class="radio-label" for="p3" data-i18n="pipeline_p3">Yo'l 3 — Python Filter</label>
+    </div>
+  </div>
+
+  <div class="card" id="row-gemini-key">
+    <div class="field">
+      <label data-i18n="key_gemini">Model API Key</label>
+      <div class="pass-wrap">
+        <input type="password" id="gemini-api-key" data-i18n-placeholder="key_gemini_ph" placeholder="AIza... (har safar kiriting)">
+        <button class="eye-btn" onclick="toggleEye('gemini-api-key',this)" tabindex="-1">👁</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="row-aisha-key" style="display:none">
+    <div class="field">
+      <label data-i18n="key_aisha">MohirDev STT API Key (Yo'l 1)</label>
+      <div class="pass-wrap">
+        <input type="password" id="aisha-api-key" data-i18n-placeholder="key_aisha_ph" placeholder="x-api-key qiymatini kiriting...">
+        <button class="eye-btn" onclick="toggleEye('aisha-api-key',this)" tabindex="-1">👁</button>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="source_title">Audio manba</div>
+
+  <div class="radio-group" id="source-radio">
+    <div class="radio-item">
+      <input type="radio" name="source" id="s1" value="YouTube URL">
+      <label class="radio-label" for="s1" data-i18n="source_yt">▶ YouTube URL</label>
+    </div>
+    <div class="radio-item">
+      <input type="radio" name="source" id="s2" value="JSON URL fayl">
+      <label class="radio-label" for="s2" data-i18n="source_json">📄 JSON URL fayl</label>
+    </div>
+    <div class="radio-item">
+      <input type="radio" name="source" id="s3" value="HuggingFace Dataset">
+      <label class="radio-label" for="s3" data-i18n="source_hf">🤗 HuggingFace</label>
+    </div>
+    <div class="radio-item">
+      <input type="radio" name="source" id="s4" value="Local papka" checked>
+      <label class="radio-label" for="s4" data-i18n="source_local">📁 Local papka</label>
+    </div>
+  </div>
+
+  <div id="src-yt" class="src-row">
+    <div class="field field--flex">
+      <label data-i18n="yt_url">YouTube URL</label>
+      <input type="text" id="yt-url" data-i18n-placeholder="yt_url_ph" placeholder="https://youtube.com/watch?v=...">
+    </div>
+  </div>
+
+  <div id="src-json" style="display:none">
+    <div class="field">
+      <label data-i18n="json_upload">JSON fayl yuklang</label>
+      <div class="file-drop" id="json-drop">
+        <div class="drop-hint" data-i18n="json_drop">Faylni bu yerga tashlang yoki bosing</div>
+        <input type="file" id="json-file" accept=".json">
+        <div class="file-name" id="json-fname" data-i18n="json_empty">Fayl tanlanmagan</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="src-hf" style="display:none">
+    <div class="field">
+      <label data-i18n="hf_name_label">Dataset nomi yoki URL</label>
+      <input type="text" id="hf-name" data-i18n-placeholder="hf_name_ph" placeholder="org/dataset-name  yoki  https://huggingface.co/datasets/...">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label><span data-i18n="hf_config">Config / Subset</span> <span class="label-opt" data-i18n="hf_config_opt">(ixtiyoriy)</span></label>
+        <input type="text" id="hf-config" data-i18n-placeholder="hf_config_ph" placeholder="uz, en, ...">
+      </div>
+    </div>
+    <div class="field">
+      <label><span data-i18n="hf_token_label">HuggingFace Token</span> <span class="label-opt" data-i18n="hf_token_private">(private dataset uchun)</span></label>
+      <div class="pass-wrap">
+        <input type="password" id="hf-dataset-token" data-i18n-placeholder="hf_token_ph" placeholder="hf_xxxx... (public uchun bo'sh qoldiring)">
+        <button class="eye-btn" onclick="toggleEye('hf-dataset-token',this)" tabindex="-1">👁</button>
+      </div>
+    </div>
+    <input type="hidden" id="hf-split" value="train">
+  </div>
+
+  <div id="src-local">
+    <div class="field">
+      <label data-i18n="local_title">Papka tanlang</label>
+      <div class="file-drop file-drop--folder" id="local-drop" onclick="document.getElementById('local-folder-input').click()">
+        <div class="drop-icon">📁</div>
+        <div>
+          <div class="local-drop-label" id="local-drop-label" data-i18n="local_click">Papkani tanlash uchun bosing</div>
+          <div class="local-drop-sub" id="local-drop-sub" data-i18n="local_hint">Audio fayllar (.wav .mp3 .ogg .flac .m4a) bo'lgan papkani tanlang</div>
+        </div>
+        <input type="file" id="local-folder-input" webkitdirectory mozdirectory directory multiple class="visually-hidden" onchange="onLocalFolderSelect(this)" aria-label="Papka tanlash" data-i18n-aria="local_title">
+      </div>
+      <input type="text" id="local-dir" style="display:none">
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 2: Filtrlar ══ -->
+<div class="tab-content">
+
+  <div class="sec-title" data-i18n="filter_title">Shovqin Kamaytirish</div>
+  <div class="card">
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="nr_label">Noise Reduction</div>
+        <div class="toggle-desc" data-i18n="nr_desc">Har bir audio segmentdan orqa fon shovqinini kamaytiradi</div>
+      </div>
+      <div class="toggle-switch">
+        <input type="checkbox" id="noise-reduce" checked>
+        <span class="toggle-track"></span>
+      </div>
+    </label>
+    <div class="slider-wrap slider-wrap--mt">
+      <label data-i18n="nr_strength">Kuch (0.1 = yengil · 1.0 = maksimal)</label>
+      <div class="slider-row">
+        <input type="range" id="noise-strength" min="0.1" max="1.0" value="0.75" step="0.05"
+               oninput="document.getElementById('noise-strength-val').textContent=parseFloat(this.value).toFixed(2)">
+        <div class="slider-val" id="noise-strength-val">0.75</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="chunk_title">Audio Chunk Uzunligi</div>
+  <div class="row">
+    <div class="slider-wrap">
+      <label data-i18n="dur_min">Minimal uzunlik (s)</label>
+      <div class="slider-row">
+        <input type="range" id="dur-min" min="1" max="15" value="3" step="1" oninput="document.getElementById('dur-min-val').textContent=this.value">
+        <div class="slider-val" id="dur-min-val">3</div>
+      </div>
+    </div>
+    <div class="slider-wrap">
+      <label data-i18n="dur_max">Maksimal uzunlik (s)</label>
+      <div class="slider-row">
+        <input type="range" id="dur-max" min="10" max="60" value="30" step="1" oninput="document.getElementById('dur-max-val').textContent=this.value">
+        <div class="slider-val" id="dur-max-val">30</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="smart_title">Model Aqlli Filtrlari</div>
+  <div class="card card--grid-2">
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="f_music">Fon musiqali audiolarni o'chirish</div>
+        <div class="toggle-desc" data-i18n="f_music_d">Orqa fonda musiqa yoki kuchli shovqin bor bo'lsa — filtrlanadi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-music" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="f_multi">Ko'p kishi gapirayotgan audiolarni o'chirish</div>
+        <div class="toggle-desc" data-i18n="f_multi_d">STT dataset uchun bitta ovoz bo'lishi kerak</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-multi" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="f_noisy">Juda shovqinli audiolarni o'chirish</div>
+        <div class="toggle-desc" data-i18n="f_noisy_d">Atrofdagi shovqin juda baland bo'lsa filtrlanadi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-noisy"><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="f_silence">Uzoq sukut bo'lagini o'chirish</div>
+        <div class="toggle-desc" data-i18n="f_silence_d">Audioning ko'p qismi sukunat bo'lsa filtrlanadi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-silence" checked><span class="toggle-track"></span></div>
+    </label>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="norm_title">Matnni Normallashtirish qoidalari</div>
+  <div class="card card--grid-2">
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_cap">Birinchi harfni katta bilan yozish</div>
+        <div class="toggle-desc" data-i18n="n_cap_d">Har bir gapning birinchi so'zi doim katta harf bilan boshlanadi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-capitalize" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_numw">1→bir · Raqamlarni so'z bilan yozish</div>
+        <div class="toggle-desc" data-i18n="n_numw_d">Barcha raqamlar tekst holatida yoziladi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-num-words" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_latin">Faqat lotin yozuvida bo'lsin</div>
+        <div class="toggle-desc" data-i18n="n_latin_d">Boshqa tildagi yozuvlar lotin alifbosiga o'tkaziladi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-latin-only" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_notrans">Tarjima qilmaslik</div>
+        <div class="toggle-desc" data-i18n="n_notrans_d">Asl audio tili holatida transcription qilinadi</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-no-translate" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_nonoise">Shovqin teglarini o'chirish</div>
+        <div class="toggle-desc" data-i18n="n_nonoise_d">Kulgu, it ovozi va shunga o'xshash teglarni qo'shmaslik</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-no-noise-tags" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="n_noprompt">Buyruqlarni qayta yozmaslik</div>
+        <div class="toggle-desc" data-i18n="n_noprompt_d">Model ko'rsatmalarni transcription ichiga yozmasin</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="filter-no-repeat-prompt" checked><span class="toggle-track"></span></div>
+    </label>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="meta_title">Aisha v2 metadata filtri</div>
+  <div class="meta-desc" data-i18n="meta_desc">
+    Metadatadagi xato va nomaqbul matnlarni tozalash. Yoqilgan holatda pipeline davomida avtomatik qo'llaniladi.
+  </div>
+  <div class="card card--grid-3">
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m1">① Birinchi harfni katta bilan yozish</div><div class="toggle-desc" data-i18n="m1_d">Har bir gapning birinchi so'zi katta harf bilan boshlanadi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-capitalize" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m2">② Raqamlarni so'z bilan yozish</div><div class="toggle-desc" data-i18n="m2_d">Raqamlar tekst holatida yoziladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-num-words" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m3">③ Apostrofni to'g'rilash</div><div class="toggle-desc" data-i18n="m3_d">ʻ va ʼ → standart ' apostrofi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-apostrophe" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m4">④ Takrorlangan matnni o'chirish</div><div class="toggle-desc" data-i18n="m4_d">Matn ikki marta yozilgan bo'lsa biri o'chiriladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-duplicate" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m5">⑤ Tinish belgisi qo'shish</div><div class="toggle-desc" data-i18n="m5_d">Gap oxirida . ! ? bo'lmasa nuqta qo'yiladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-punct"><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m6">⑥ Qo'shtirnoqlarni to'g'rilash</div><div class="toggle-desc" data-i18n="m6_d">" " va ' ' → standart " belgisi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-quotes" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m7">⑦ Gap ichida kichik harfni to'g'rilash</div><div class="toggle-desc" data-i18n="m7_d">. ! ? dan keyin katta harf.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-sentence-case" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m8">⑧ Qo'sh bo'shliqlarni o'chirish</div><div class="toggle-desc" data-i18n="m8_d">Ikki+ bo'shliq → bitta.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-double-space" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m9">⑨ JSON artifactlarni tozalash</div><div class="toggle-desc" data-i18n="m9_d">{'transcription': '...'} qoldiqlari tozalanadi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-clean-json" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m10">⑩ Uch nuqta → ellipsis</div><div class="toggle-desc" data-i18n="m10_d">'...' o'rniga '…' belgisi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-ellipsis"><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m11">⑪ Defisni tirega almashtirish</div><div class="toggle-desc" data-i18n="m11_d">' - ' → '—'.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-dash"><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m12">⑫ Kirill harflar → filtr</div><div class="toggle-desc" data-i18n="m12_d">Kirill harfli segment o'chiriladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-cyrillic" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m13">⑬ Bracket artifactlarni tozalash</div><div class="toggle-desc" data-i18n="m13_d">[{json...}] qoldiqlari tozalanadi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-brackets" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m14">⑭ HTML teglarni tozalash</div><div class="toggle-desc" data-i18n="m14_d">&lt;tag&gt; belgilar o'chiriladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-html" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m15">⑮ Faqat raqam → filtr</div><div class="toggle-desc" data-i18n="m15_d">Faqat raqamli matn ('497347') o'chiriladi.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-only-digits" checked><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m16">⑯ Singan tirani to'g'rilash</div><div class="toggle-desc" data-i18n="m16_d">'so'z- so'z' → 'so'z-so'z'.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-broken-hyphen"><span class="toggle-track"></span></div>
+    </label>
+    <label class="toggle-item">
+      <div class="toggle-content"><div class="toggle-label" data-i18n="m17">⑰ Ko'p vergullarni tozalash</div><div class="toggle-desc" data-i18n="m17_d">',,,,' → ','.</div></div>
+      <div class="toggle-switch"><input type="checkbox" id="norm-multi-comma" checked><span class="toggle-track"></span></div>
+    </label>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="cols_title">Metadata Ustunlarini Tanlash</div>
+  <div class="card">
+    <div class="cols-wrap">
+      <label class="check-item"><input type="checkbox" id="col-file-name" checked disabled><div class="check-label">file_name <span class="muted-tag" data-i18n="col_always">(har doim)</span></div></label>
+      <label class="check-item"><input type="checkbox" id="col-transcription" checked><div class="check-label">transcription</div></label>
+      <label class="check-item"><input type="checkbox" id="col-duration" checked><div class="check-label">duration</div></label>
+      <label class="check-item"><input type="checkbox" id="col-source" checked><div class="check-label">source</div></label>
+      <input type="checkbox" id="col-status"        style="display:none">
+      <input type="checkbox" id="col-reason"        style="display:none">
+      <input type="checkbox" id="col-source-url"    style="display:none">
+      <input type="checkbox" id="col-original-text" style="display:none">
+      <input type="checkbox" id="col-change-ratio"  style="display:none">
+      <input type="checkbox" id="col-snr-score"     style="display:none">
+      <input type="checkbox" id="col-silence-ratio" style="display:none">
+      <input type="checkbox" id="col-pipeline"      style="display:none">
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 3: Natija Formati ══ -->
+<div class="tab-content">
+
+  <div class="format-grid">
+    <div class="format-col">
+      <div class="sec-title" data-i18n="format_title">Fayl nomlari</div>
+      <div id="out-v1-wrap" class="pipeline-out-wrap" style="display:none">
+        <div class="mono-hint" data-i18n="out_v1">→ Yo'l 1 (MohirDev API) chiqish fayli</div>
+      </div>
+      <div id="out-v2-wrap" class="pipeline-out-wrap">
+        <div class="mono-hint" data-i18n="out_v2">→ Yo'l 2 (Gemini STT) chiqish fayli</div>
+      </div>
+      <div id="out-v3-wrap" class="pipeline-out-wrap" style="display:none">
+        <div class="mono-hint" data-i18n="out_v3">→ Yo'l 3 (Python Filter) chiqish fayli</div>
+      </div>
+      <div class="field">
+        <label data-i18n="out_name_label">Metadata fayl nomi</label>
+        <input type="text" id="out-name" value="metadata">
+      </div>
+    </div>
+
+    <div class="format-col">
+      <div class="sec-title" data-i18n="write_title">Yozish rejimi</div>
+      <div class="radio-group radio-group--stack">
+        <div class="radio-item">
+          <input type="radio" name="write-mode" id="wm-new" value="new" checked>
+          <label class="radio-label" for="wm-new" data-i18n="wm_new">📄 Yangi fayl yaratish</label>
+        </div>
+        <div class="radio-item">
+          <input type="radio" name="write-mode" id="wm-append" value="append">
+          <label class="radio-label" for="wm-append" data-i18n="wm_append">➕ Mavjudga qo'shish</label>
+        </div>
+      </div>
+      <div class="mono-hint" data-i18n="wm_hint">
+        Append: bir nechta URL dan olingan metadatalar bitta faylga yig'iladi
+      </div>
+    </div>
+
+    <div class="format-col">
+      <div class="sec-title" data-i18n="format_title2">Format</div>
+      <div class="fmt-group">
+        <label class="check-item"><input type="checkbox" id="fmt-jsonl" checked><div class="check-label">JSONL</div></label>
+        <label class="check-item"><input type="checkbox" id="fmt-csv" checked><div class="check-label">CSV</div></label>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 4: Ishga tushur ══ -->
+<div class="tab-content">
+
+  <div class="btn-row btn-row--mb">
+    <button class="btn-primary btn-primary--lg" id="start-btn" onclick="startPipeline()" data-i18n="start_btn">▶ Ishga tushur</button>
+    <div class="status-badge" id="status-badge"><div class="dot"></div><span id="status-text" data-i18n="status_ready">Tayyor</span></div>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap" style="display:none">
+    <div class="progress-header">
+      <span class="progress-stage" id="progress-stage" data-i18n="status_preparing">Tayyorlanmoqda...</span>
+      <span class="progress-pct" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div id="progress-bar"></div>
+    </div>
+    <div class="progress-count" id="progress-count"></div>
+  </div>
+
+  <div id="notify-box"></div>
+
+  <div class="sec-title" data-i18n="stats_title">Statistika</div>
+  <div class="stats-area" id="stats-area">
+    <div id="stats-block-v1">
+      <div class="stats-label" id="stats-label-v1" data-i18n="stat_yol1">YO'L 1</div>
+      <div class="stats-grid" id="stats-v1">
+        <div class="stat-chip"><div class="stat-num" id="s1-total">0</div><div class="stat-lbl" data-i18n="stat_total">Jami</div></div>
+        <div class="stat-chip approved"><div class="stat-num" id="s1-approved">0</div><div class="stat-lbl" data-i18n="stat_approved">Approved</div></div>
+        <div class="stat-chip"><div class="stat-num" id="s1-pending">0</div><div class="stat-lbl" data-i18n="stat_pending">Pending</div></div>
+        <div class="stat-chip rejected"><div class="stat-num" id="s1-rejected">0</div><div class="stat-lbl" data-i18n="stat_rejected">Rejected</div></div>
+        <div class="stat-chip filtered"><div class="stat-num" id="s1-filtered">0</div><div class="stat-lbl" data-i18n="stat_filtered">Filtered</div></div>
+      </div>
+    </div>
+    <div id="stats-block-v2">
+      <div class="stats-label" data-i18n="stat_yol2">YO'L 2</div>
+      <div class="stats-grid" id="stats-v2">
+        <div class="stat-chip"><div class="stat-num" id="s2-total">0</div><div class="stat-lbl" data-i18n="stat_total">Jami</div></div>
+        <div class="stat-chip approved"><div class="stat-num" id="s2-approved">0</div><div class="stat-lbl" data-i18n="stat_approved">Approved</div></div>
+        <div class="stat-chip"><div class="stat-num" id="s2-pending">0</div><div class="stat-lbl" data-i18n="stat_pending">Pending</div></div>
+        <div class="stat-chip rejected"><div class="stat-num" id="s2-rejected">0</div><div class="stat-lbl" data-i18n="stat_rejected">Rejected</div></div>
+        <div class="stat-chip filtered"><div class="stat-num" id="s2-filtered">0</div><div class="stat-lbl" data-i18n="stat_filtered">Filtered</div></div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="log_title">Log</div>
+  <div id="log-box"></div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="files_meta_title">Tayyor fayllar — Metadata</div>
+  <div class="file-list" id="file-list">
+    <div class="empty-list" data-i18n="files_none">Hali fayl yo'q</div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="files_zip_title">Audio fayllar — ZIP</div>
+  <div class="btn-row" style="margin-bottom:10px">
+    <button class="btn-secondary" onclick="makeZip()" data-i18n="zip_btn">🗜 Audio fayllarni ZIP qilish</button>
+    <div id="zip-status"></div>
+  </div>
+  <div class="file-list" id="zip-list">
+    <div class="empty-list" data-i18n="zip_none">Hali ZIP yo'q</div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="results_title">Natijalarni Ko'rish</div>
+  <div class="review-nav">
+    <button class="btn-secondary" onclick="doReview(-1)" data-i18n="prev_btn">◀ Oldingi</button>
+    <div class="review-idx" id="rev-idx">0 / 0</div>
+    <button class="btn-secondary" onclick="doReview(1)" data-i18n="next_btn">Keyingi ▶</button>
+  </div>
+  <div class="review-grid">
+    <div>
+      <audio id="rev-audio" controls style="display:none"></audio>
+      <div class="audio-name" id="rev-audio-name"></div>
+    </div>
+    <div>
+      <label data-i18n="transcript_label">Transkript</label>
+      <textarea class="rev-text" id="rev-text" readonly rows="4" data-i18n-placeholder="no_results" placeholder="Natijalar yo'q..."></textarea>
+      <div class="rev-meta" id="rev-meta"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 5: HuggingFace Push ══ -->
+<div class="tab-content">
+
+  <div class="sec-title" data-i18n="hf_settings">HuggingFace Sozlamalari</div>
+  <div class="card">
+    <div class="field">
+      <label data-i18n="hf_token_label2">HF Token</label>
+      <div class="pass-wrap">
+        <input type="password" id="hf-token" placeholder="hf_xxxxxxxxxxxxxxxxxxxx">
+        <button class="eye-btn" onclick="toggleEye('hf-token',this)" tabindex="-1">👁</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="hf_org_label">Org nomi</label>
+        <input type="text" id="hf-org" placeholder="mohirdev-org">
+      </div>
+      <div class="field">
+        <label data-i18n="hf_repo_label">Repo nomi</label>
+        <input type="text" id="hf-repo" placeholder="my_dataset">
+      </div>
+    </div>
+    <label class="check-item">
+      <input type="checkbox" id="hf-private" checked>
+      <div class="check-label" data-i18n="hf_private_lbl">🔒 Private repo</div>
+    </label>
+  </div>
+
+  <hr class="sec-divider">
+
+  <div class="card card--success" id="hf-auto-info" style="display:none">
+    <div class="hf-auto-badge" data-i18n="hf_auto_badge">✅ Pipeline natijasi avtomatik yuklandi</div>
+    <div class="row row--wrap">
+      <div class="field">
+        <label data-i18n="hf_jsonl_lbl">JSONL fayl</label>
+        <input type="text" id="hf-jsonl-path" readonly class="input--readonly">
+      </div>
+      <div class="field">
+        <label data-i18n="hf_csv_lbl">CSV fayl</label>
+        <input type="text" id="hf-csv-path" readonly class="input--readonly">
+      </div>
+      <div class="field">
+        <label data-i18n="hf_audio_lbl">Audio papka</label>
+        <input type="text" id="hf-audio-path" readonly class="input--readonly">
+      </div>
+    </div>
+  </div>
+
+  <div id="hf-no-pipeline" class="card card--warn" data-i18n="hf_warn">
+    ⚠️ Avval "4 · Ishga tushur" tabida pipeline ishga tushiring. Pipeline tugagach bu yerga avtomatik to'ldiriladi.
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="push_format_title">Push formati</div>
+  <div class="hf-tab-btns">
+    <button class="btn-secondary" id="hf-tab-jsonl-btn" onclick="switchHFTab('jsonl')" style="border-color:var(--p);color:var(--p);" data-i18n="push_jsonl_btn">📄 JSONL bilan push</button>
+    <button class="btn-secondary" id="hf-tab-csv-btn" onclick="switchHFTab('csv')" data-i18n="push_csv_btn">📊 CSV bilan push</button>
+  </div>
+
+  <div id="hf-jsonl-panel">
+    <button class="btn-primary btn-push" onclick="doPush('jsonl')" data-i18n="push_btn_jsonl2">🚀 HuggingFace ga push qilish (JSONL)</button>
+    <div class="hf-status" id="hf-jsonl-status" data-i18n="push_ready">Tayyor</div>
+  </div>
+  <div id="hf-csv-panel" style="display:none">
+    <button class="btn-primary btn-push" onclick="doPush('csv')" data-i18n="push_btn_csv2">🚀 HuggingFace ga push qilish (CSV)</button>
+    <div class="hf-status" id="hf-csv-status" data-i18n="push_ready">Tayyor</div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 6: Augmentation ══ -->
+<div class="tab-content">
+
+  <div class="sec-title" data-i18n="aug_title">Dataset Augmentation</div>
+  <div class="card">
+    <div class="row">
+      <div class="field" style="flex:0 0 180px">
+        <label data-i18n="aug_cpu">CPU yadro (num_proc)</label>
+        <input type="number" id="aug-num-proc" value="16">
+      </div>
+      <div class="slider-wrap" style="margin-bottom:14px;flex:1">
+        <label><span data-i18n="aug_prob_lbl">Augmentatsiya ehtimolligi (%)</span> <span class="label-opt" data-i18n="aug_prob_hint">— Necha foiz audioga shovqin qo'shilsin</span></label>
+        <div class="slider-row">
+          <input type="range" id="aug-prob" min="0" max="100" value="100" step="5" oninput="document.getElementById('aug-prob-val').textContent=this.value+'%'">
+          <div class="slider-val" id="aug-prob-val">100%</div>
+        </div>
+      </div>
+    </div>
+    <label class="toggle-item" style="margin-bottom:14px">
+      <div class="toggle-content">
+        <div class="toggle-label" data-i18n="aug_skip_lbl">Augmentatsiyani o'tkazib yuborish (Skip)</div>
+        <div class="toggle-desc" data-i18n="aug_skip_d">Shovqin qo'shmasdan shunchaki HF Dataset formatiga o'tkazish</div>
+      </div>
+      <div class="toggle-switch"><input type="checkbox" id="aug-skip-checkbox"><span class="toggle-track"></span></div>
+    </label>
+    <div class="aug-btns">
+      <button class="btn-secondary" onclick="startAugmentation('test')" data-i18n="aug_test_btn">🧪 100 tasida Test</button>
+      <button class="btn-success" onclick="startAugmentation('continue')" data-i18n="aug_continue_btn">▶ Qolganini davom ettirish</button>
+      <button class="btn-secondary" onclick="startAugmentation('full')" data-i18n="aug_full_btn">⚙ Barchasini Augment</button>
+    </div>
+    <div class="status-badge" id="aug-status-badge"><div class="dot"></div><span id="aug-status-text" data-i18n="status_ready">Tayyor</span></div>
+    <div class="log-section">
+      <label data-i18n="log_title">Log</label>
+      <div id="aug-log-box" class="task-log"></div>
+    </div>
+  </div>
+
+  <hr class="sec-divider">
+  <div class="sec-title" data-i18n="aug_review_title">Augmented Natijani Ko'rish</div>
+  <div class="review-nav">
+    <button class="btn-secondary" onclick="doAugReview(-1)" data-i18n="prev_btn">◀ Oldingi</button>
+    <div class="review-idx" id="aug-rev-idx">0 / 0</div>
+    <button class="btn-secondary" onclick="doAugReview(1)" data-i18n="next_btn">Keyingi ▶</button>
+  </div>
+  <div class="review-grid">
+    <div>
+      <audio id="aug-rev-audio" controls style="display:none"></audio>
+    </div>
+    <div>
+      <label data-i18n="aug_text_lbl">Matn</label>
+      <textarea class="rev-text" id="aug-rev-text" readonly rows="4" data-i18n-placeholder="no_results" placeholder="Natijalar yo'q..."></textarea>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 7: Mapping ══ -->
+<div class="tab-content">
+
+  <div class="sec-title" data-i18n="map_title">HuggingFace Mapping</div>
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label data-i18n="map_model_lbl">Model nomi</label>
+        <select id="map-model-name">
+          <option value="openai/whisper-tiny">openai/whisper-tiny (80 mel bins)</option>
+          <option value="openai/whisper-base">openai/whisper-base (80 mel bins)</option>
+          <option value="openai/whisper-small">openai/whisper-small (80 mel bins)</option>
+          <option value="openai/whisper-medium">openai/whisper-medium (80 mel bins)</option>
+          <option value="openai/whisper-large-v3" selected>openai/whisper-large-v3 (128 mel bins)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label data-i18n="map_output_lbl">Chiqish papkasi (Output Dir)</label>
+        <input type="text" id="map-output-dir" value="full_mapping_dataset_v2">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:2">
+        <label data-i18n="map_token_lbl">HuggingFace Token</label>
+        <div class="pass-wrap">
+          <input type="password" id="map-hf-token" placeholder="hf_xxxx...">
+          <button class="eye-btn" onclick="toggleEye('map-hf-token',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div class="field" style="flex:0 0 180px">
+        <label data-i18n="map_cpu_lbl">CPU yadro (num_proc)</label>
+        <input type="number" id="map-num-proc" value="20">
+      </div>
+    </div>
+    <div class="field">
+      <label data-i18n="map_ds_lbl">HuggingFace Dataset nomlari (vergul bilan)</label>
+      <input type="text" id="map-ds-names" placeholder="mohirdev-org/dataset1, mohirdev-org/dataset2" value="">
+    </div>
+    <button class="btn-primary btn-full" onclick="startMapping()" style="margin-bottom:12px" data-i18n="map_start_btn">⚙ Mappingni boshlash</button>
+    <div class="status-badge" id="map-status-badge"><div class="dot"></div><span id="map-status-text" data-i18n="status_ready">Tayyor</span></div>
+    <div class="log-section">
+      <label data-i18n="log_title">Log</label>
+      <div id="map-log-box" class="task-log"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB 8: Training ══ -->
+<div class="tab-content">
+
+  <div class="sec-title" data-i18n="train_title">Model Training</div>
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_wandb_lbl">W&amp;B API Key</label>
+        <div class="pass-wrap">
+          <input type="password" id="train-wandb-key" placeholder="wandb_xxxx...">
+          <button class="eye-btn" onclick="toggleEye('train-wandb-key',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="train_hf_lbl">HuggingFace Token (HF_TOKEN)</label>
+        <div class="pass-wrap">
+          <input type="password" id="train-hf-token" placeholder="hf_xxxx...">
+          <button class="eye-btn" onclick="toggleEye('train-hf-token',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_model_lbl">Model</label>
+        <select id="train-model">
+          <option value="openai/whisper-tiny">openai/whisper-tiny</option>
+          <option value="openai/whisper-base">openai/whisper-base</option>
+          <option value="openai/whisper-small">openai/whisper-small</option>
+          <option value="openai/whisper-medium">openai/whisper-medium</option>
+          <option value="openai/whisper-large-v3" selected>openai/whisper-large-v3</option>
+        </select>
+      </div>
+      <div class="field">
+        <label data-i18n="train_ds_lbl">Mapped Datasetlar (vergul bilan)</label>
+        <input type="text" id="train-ds-dirs" value="full_mapping_dataset,full_mapping_dataset_v2">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_cpu_lbl">CPU (num_proc)</label>
+        <input type="number" id="train-num-proc" value="4">
+      </div>
+      <div class="field">
+        <label data-i18n="train_split_lbl">Train/Test split</label>
+        <input type="text" id="train-split" value="0.01">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_output_lbl">Output Dir</label>
+        <input type="text" id="train-output" value="./whisper-large-dv_v2">
+      </div>
+      <div class="field">
+        <label data-i18n="train_batch_lbl">Batch Size</label>
+        <input type="number" id="train-batch" value="16">
+      </div>
+      <div class="field">
+        <label data-i18n="train_grad_lbl">Grad Accumulation</label>
+        <input type="number" id="train-grad-acc" value="1">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_lr_lbl">Learning Rate</label>
+        <input type="text" id="train-lr" value="1e-6">
+      </div>
+      <div class="field">
+        <label data-i18n="train_epochs_lbl">Epochs</label>
+        <input type="number" id="train-epochs" value="7">
+      </div>
+      <div class="field">
+        <label data-i18n="train_ddpt_lbl">DDP Timeout</label>
+        <input type="number" id="train-ddp-timeout" value="7200">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label data-i18n="train_workers_lbl">Dataloader Workers</label>
+        <input type="number" id="train-workers" value="2">
+      </div>
+      <label class="check-item train-check">
+        <input type="checkbox" id="train-pin-mem" checked>
+        <div class="check-label" data-i18n="train_pin_lbl">Pin Memory</div>
+      </label>
+      <label class="check-item train-check">
+        <input type="checkbox" id="train-ddp-unused">
+        <div class="check-label" data-i18n="train_ddpu_lbl">DDP Find Unused</div>
+      </label>
+      <label class="check-item train-check">
+        <input type="checkbox" id="train-resume" checked>
+        <div class="check-label" data-i18n="train_resume_lbl">Resume Checkpoint</div>
+      </label>
+    </div>
+    <button class="btn-primary btn-full" onclick="startTraining()" style="margin-top:14px;margin-bottom:12px" data-i18n="train_start_btn">🚀 Trainingni boshlash</button>
+    <div class="status-badge" id="train-status-badge"><div class="dot"></div><span id="train-status-text" data-i18n="status_ready">Tayyor</span></div>
+    <div class="log-section">
+      <label data-i18n="log_title">Log</label>
+      <div id="train-log-box" class="task-log task-log--tall"></div>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /tabs-wrap -->
+</div><!-- /app -->
+
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/api.js"></script>
+</body>
+</html>

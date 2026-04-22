@@ -1,0 +1,34 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Large data folders
+outputs/
+downloads/
+segments/
+uploads_tmp/
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Windows exe
+*.exe
+
+# Test files
+test.json
+debug*.py
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
