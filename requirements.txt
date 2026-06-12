@@ -7,6 +7,11 @@ noisereduce>=3.0.0
 numpy>=1.24.0
 librosa>=0.10.0
 soundfile>=0.12.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# ─── Audio augmentation (Section 6) ─────────
+audiomentations>=0.34.0
 
 # ─── Google Gemini ──────────────────────────
 google-genai>=0.8.0

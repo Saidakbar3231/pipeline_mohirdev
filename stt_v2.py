@@ -6,6 +6,8 @@ Yo'l 2: Gemini STT Pipeline
   → Status → metadata_v2.jsonl
 """
 
+import os
+
 from filter_audio import filter_audio
 from filter_text import filter_text_v2
 from gemini_utils import transcribe_audio_gemini, score_transcription, determine_status_v2
@@ -16,8 +18,33 @@ from config import (
 )
 
 
-def process_segment_v2(segment: dict, filters: dict) -> dict:
+def process_segment_v2(segment: dict, filters: dict, log=None) -> dict:
+    """Yo'l 2 segment pipeline.
+
+    log: optional callable(str). When the caller passes its UI-log sink (e.g.
+    app._log), every rejection point emits a structured, per-filter
+    `[FILTER_REJECT] <file> → reason: ...` line into the UI log stream so a run's
+    segment loss can be attributed to an exact filter. Segments that pass STT but
+    only reach the manual-review queue emit a `[FILTER_PENDING]` line — those are
+    NOT rejected, they simply did not auto-approve.
+    """
+    def _emit(msg):
+        if log:
+            log(msg)
+
+    fname = segment.get("file_name") or os.path.basename(segment.get("file", "") or "segment")
     result = {**segment, "pipeline": "gemini_stt", "status": "pending"}
+
+    # ── 0. Lokal audio kontent tahlili — teglashtirish, filtrlash emas ─
+    # Musiqa yoki ko'p ovoz aniqlansa segment O'CHIRILMAYDI.
+    # Natija metadataga flag sifatida qo'shiladi va transcription davom etadi.
+    if filters.get("filter_background_music", True):
+        from filter_audio import detect_music
+        result["has_background_music"] = detect_music(segment["file"])
+
+    if filters.get("filter_multiple_speakers", True):
+        from filter_audio import detect_multiple_speakers
+        result["has_multiple_speakers"] = detect_multiple_speakers(segment["file"])
 
     # ── 1. Audio filtri ───────────────────────────────────────────
     # filter_noisy: yoqilganda SNR tekshiruvi qattiqroq (15 dB chegara)
@@ -38,27 +65,21 @@ def process_segment_v2(segment: dict, filters: dict) -> dict:
     result["silence_ratio"] = segment.get("silence_ratio")
 
     if not ok:
+        _emit(f"[FILTER_REJECT] {fname} → reason: audio/{reason}")
         return {**result, "status": "filtered", "reason": f"audio: {reason}"}
 
     # ── 2. Gemini STT (filter flaglari prompt orqali uzatiladi) ───
     try:
         text, filter_tags = transcribe_audio_gemini(segment["file"], filters=filters)
     except Exception as e:
+        _emit(f"[FILTER_REJECT] {fname} → reason: Gemini STT error: {e}")
         return {**result, "status": "filtered", "reason": f"Gemini STT xato: {e}"}
 
     if not text or "TUSHUNARSIZ" in filter_tags:
+        _emit(f"[FILTER_REJECT] {fname} → reason: unintelligible audio (Gemini→TUSHUNARSIZ)")
         return {**result, "status": "filtered", "reason": "tushunarsiz audio"}
 
-    # filter_background_music: Gemini MUSIQA_BOR tegi qaytarsa filtrla
-    if filters.get("filter_background_music", True) and "MUSIQA_BOR" in filter_tags:
-        return {**result, "status": "filtered", "reason": "fon musiqasi aniqlandi"}
-
-    # filter_multiple_speakers: Gemini KO'P_OVOZ tegi qaytarsa filtrla
-    if filters.get("filter_multiple_speakers", True) and "KO'P_OVOZ" in filter_tags:
-        return {**result, "status": "filtered", "reason": "ko'p ovoz aniqlandi"}
-
     result["transcription"] = text
-    result["gemini_filters"] = filter_tags
 
     # ── 3. Matn filtri ────────────────────────────────────────────
     ok, reason = filter_text_v2(
@@ -68,17 +89,29 @@ def process_segment_v2(segment: dict, filters: dict) -> dict:
         check_mixed=filters.get("check_mixed", True),
     )
     if not ok:
+        _emit(f"[FILTER_REJECT] {fname} → reason: text/{reason}")
         return {**result, "status": "filtered", "reason": f"matn: {reason}"}
 
     # ── 4. Gemini sifat bahosi ────────────────────────────────────
+    # NOTE: scoring logic itself is unchanged. We only read the same
+    # approve/reject thresholds to label the structured log line.
     score = score_transcription(text)
     result["gemini_score"] = score
 
+    approve_min = filters.get("score_approve_min", V2_SCORE_AUTO_APPROVE)
+    reject_max  = filters.get("score_reject_max", V2_SCORE_AUTO_REJECT)
     status = determine_status_v2(
         score,
-        auto_approve_min=filters.get("score_approve_min", 4),
-        auto_reject_max=filters.get("score_reject_max", 2),
+        auto_approve_min=approve_min,
+        auto_reject_max=reject_max,
     )
     result["status"] = status
+
+    if status == "rejected":
+        _emit(f"[FILTER_REJECT] {fname} → reason: Gemini score too low "
+              f"({score} ≤ {reject_max} reject-max)")
+    elif status == "pending":
+        _emit(f"[FILTER_PENDING] {fname} → reason: Gemini score {score} "
+              f"(< {approve_min} approve-min) — manual review, NOT auto-approved")
 
     return result

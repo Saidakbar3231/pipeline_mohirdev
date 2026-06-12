@@ -4,7 +4,24 @@ let _state_last_audio_dir = '';
 var _state_last_jsonl_for_aug = "";
 let _augReviewIdx = 0;
 let _augReviewDataset = 'birlashtirilgan_dataset_augmented';
+// True once the review panel has successfully rendered at least one row. Proves
+// the dataset exists and is readable, so navigation stays enabled even when the
+// live task status no longer reports done=true (e.g. after a server restart).
+// Reset to false whenever a new augmentation run starts.
+let _augReviewLoaded = false;
 let _hfJsonlPath = '', _hfCsvPath = '';
+
+// Last-observed augmentation status, written by updateTaskStatus and consulted
+// by doAugReview. Prevents the FE from fetching review endpoints while the BE
+// is still producing the dataset (or has errored out producing it).
+let _augStatus = { running: false, done: false, error: '' };
+
+// Monotonic generation counter. Each new task-status polling cycle bumps it;
+// in-flight responses from prior cycles are dropped so a delayed reply cannot
+// repaint stale state over a fresh task.
+let _taskPollGen = 0;
+// Same pattern for the pipeline progress poller.
+let _progressPollGen = 0;
 
 // ─── IN-FLIGHT GUARDS (prevent double-click / duplicate backend jobs) ──
 const _inflight = { aug: false, map: false, train: false, push: false };
@@ -50,9 +67,18 @@ function _checked(id, fallback) {
   return el.checked;
 }
 
+// ─── PIPELINE FILTER VISIBILITY ───────────────────
+function _applyPipelineFilters(v) {
+  const p = v.includes("Yo'l 1") ? "yol1"
+           : v.includes("Yo'l 2") ? "yol2"
+           : "yol3";
+  document.body.dataset.pipeline = p;
+}
+
 // ─── PIPELINE RADIO → show/hide rows ──────────────
 document.querySelectorAll('input[name="pipeline"]').forEach(r => r.addEventListener('change', function() {
   const v = this.value;
+  _applyPipelineFilters(v);
   _setDisplay('row-gemini-key', v.includes("Yo'l 2"));
   _setDisplay('row-aisha-key',  v.includes("Yo'l 1"));
 
@@ -117,6 +143,10 @@ document.querySelectorAll('input[name="source"]').forEach(r => r.addEventListene
 })();
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Pipeline filter visibility — sahifa yuklanishida boshlang'ich holat
+  const initPipeline = document.querySelector('input[name="pipeline"]:checked');
+  if (initPipeline) _applyPipelineFilters(initPipeline.value);
+
   const m = _get('map-model-name');
   if (m) m.dispatchEvent(new Event('change'));
   const t = _get('train-model');
@@ -132,10 +162,7 @@ function buildParams() {
   const cols = [];
   const colMap = {
     'col-file-name':'file_name','col-transcription':'transcription',
-    'col-duration':'duration','col-source':'source','col-status':'status',
-    'col-reason':'reason','col-source-url':'source_url',
-    'col-original-text':'original_text','col-change-ratio':'change_ratio',
-    'col-snr-score':'snr_score','col-silence-ratio':'silence_ratio','col-pipeline':'pipeline'
+    'col-duration':'duration','col-source':'source'
   };
   for (const [id, col] of Object.entries(colMap)) {
     if (_checked(id, false)) cols.push(col);
@@ -238,7 +265,9 @@ async function startPipeline() {
   if (!_validatePipelineInputs()) return;
 
   const btn = _get('start-btn');
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = '▶ Ishga tushur'; }
+  const stopBtn = _get('stop-btn');
+  if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = false; stopBtn.textContent = '⏹ To\'xtatish'; }
   setStatus('running', T('status_preparing'));
   _setDisplay('notify-box', false);
   _setText('log-box', '');
@@ -269,8 +298,14 @@ async function startPipeline() {
       _setText('progress-stage', T('uploading') || 'Yuklanmoqda...');
     }
     const r = await fetch('/api/start', {method:'POST', body: fd});
-    const d = await r.json();
-    if (d.error) { alert(d.error); if (btn) btn.disabled = false; setStatus('', T('status_ready')); return; }
+    let d = null;
+    try { d = await r.json(); } catch (_) { d = null; }
+    if (!r.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + r.status));
+      if (btn) btn.disabled = false;
+      setStatus('', T('status_ready'));
+      return;
+    }
     setStatus('running', T('status_running'));
     startPolling();
   } catch(e) {
@@ -280,18 +315,40 @@ async function startPipeline() {
   }
 }
 
+// ─── STOP PIPELINE ────────────────────────────────
+async function stopPipeline() {
+  const stopBtn  = _get('stop-btn');
+  const startBtn = _get('start-btn');
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'To\'xtatilmoqda...'; }
+  try {
+    const r = await fetch('/api/stop', { method: 'POST' });
+    let d = null;
+    try { d = await r.json(); } catch (_) { d = null; }
+    if (!r.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + r.status));
+      if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '⏹ To\'xtatish'; }
+    }
+  } catch(e) {
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '⏹ To\'xtatish'; }
+  }
+}
+
 // ─── POLLING ──────────────────────────────────────
 function startPolling() {
   if (_pollTimer) clearInterval(_pollTimer);
+  _progressPollGen++;
   _pollTimer = setInterval(pollProgress, 2000);
 }
 
 async function pollProgress() {
+  const myGen = _progressPollGen;
   try {
     const r = await fetch('/api/progress');
+    if (myGen !== _progressPollGen) return;
     // Session expired / auth redirect → response is HTML, not JSON
     if (!r.ok || !(r.headers.get('content-type') || '').includes('application/json')) {
       clearInterval(_pollTimer);
+      _progressPollGen++;
       const btn = _get('start-btn'); if (btn) btn.disabled = false;
       setStatus('', T('status_session'));
       alert(T('alert_session'));
@@ -299,6 +356,8 @@ async function pollProgress() {
       return;
     }
     const d = await r.json();
+    if (myGen !== _progressPollGen) return;
+    if (d && d.error) return;
 
     _setText('log-box', d.log || '');
     const lb = _get('log-box');
@@ -324,6 +383,13 @@ async function pollProgress() {
       _setText(`s2-${k}`, sv2[k]||0);
     });
 
+    // Mirror the audio dir as soon as the backend reports it. Previously this
+    // assignment lived inside the d.done branch, leaving startAugmentation
+    // unable to find the dir if the user navigated to the augmentation tab
+    // mid-pipeline.
+    if (d.last_audio_dir) _state_last_audio_dir = d.last_audio_dir;
+    if (d.last_jsonl)     _state_last_jsonl_for_aug = d.last_jsonl;
+
     if (d.notify) {
       _setText('notify-box', d.notify);
       _setDisplay('notify-box', true);
@@ -331,10 +397,27 @@ async function pollProgress() {
 
     renderFileList(d.files || []);
 
+    // Show/hide stop button based on running state
+    const stopBtn  = _get('stop-btn');
+    const startBtn = _get('start-btn');
+    if (stopBtn) stopBtn.style.display = d.running ? 'inline-flex' : 'none';
+    if (stopBtn && d.running) { stopBtn.disabled = false; stopBtn.textContent = '⏹ To\'xtatish'; }
+
+    // Stopped (not running, not done) — show Continue button
+    if (d.stopped && d.can_resume && !d.running) {
+      clearInterval(_pollTimer);
+      _progressPollGen++;
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.textContent = '▶ Davom ettirish';
+      }
+      setStatus('', T('status_stopped') || 'To\'xtatildi');
+    }
+
     if (d.done && !d.running) {
       clearInterval(_pollTimer);
-      const btn = _get('start-btn');
-      if (btn) btn.disabled = false;
+      _progressPollGen++;
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Ishga tushur'; }
       setStatus('done', T('status_done'));
       const pb = _get('progress-bar');
       if (pb) pb.style.width = '100%';
@@ -366,7 +449,9 @@ async function doReview(dir) {
     const r = await fetch(`/api/review?dir=${dir}`);
     if (!r.ok) { console.log('Review: no results'); return; }
     const d = await r.json();
-    _setText('rev-idx', `${d.idx} / ${d.total}`);
+    if (d.error) { console.log('Review error:', d.error); return; }
+    // Backend returns 0-based idx; FE owns +1 display.
+    _setText('rev-idx', `${(d.idx || 0) + 1} / ${d.total}`);
     const rt = _get('rev-text');
     if (rt) rt.value = d.transcription || '';
     _setText('rev-audio-name', d.file_name || '');
@@ -374,7 +459,10 @@ async function doReview(dir) {
     const audioEl = _get('rev-audio');
     if (audioEl) {
       if (d.audio_url) {
-        audioEl.src = d.audio_url;
+        // Cache-bust so a new pipeline run that overwrites the same file path
+        // is not masked by the browser's HTTP cache.
+        const sep = d.audio_url.includes('?') ? '&' : '?';
+        audioEl.src = d.audio_url + sep + 't=' + Date.now();
         audioEl.style.display = '';
         audioEl.load();
       } else {
@@ -398,8 +486,12 @@ async function makeZip() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({audio_dir: _state_last_audio_dir})
     });
-    const d = await r.json();
-    if (d.error) { _setText('zip-status', '❌ ' + d.error); return; }
+    let d = null;
+    try { d = await r.json(); } catch (_) { d = null; }
+    if (!r.ok || !d || d.error) {
+      _setText('zip-status', '❌ ' + ((d && d.error) || ('HTTP ' + r.status)));
+      return;
+    }
     _setText('zip-status', `✅ ${d.count} ta fayl, ${d.size_mb} MB`);
     loadZipList();
   } catch(e) {
@@ -441,8 +533,12 @@ async function deleteFile(path) {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({path})
     });
-    const d = await r.json();
-    if (d.error) { alert('Xato: ' + d.error); return; }
+    let d = null;
+    try { d = await r.json(); } catch (_) { d = null; }
+    if (!r.ok || !d || d.error) {
+      alert('Xato: ' + ((d && d.error) || ('HTTP ' + r.status)));
+      return;
+    }
     loadZipList();
     refreshFileLists();
   } catch(e) { alert(T('status_error') + ': ' + e); }
@@ -451,7 +547,10 @@ async function deleteFile(path) {
 async function refreshFileLists() {
   try {
     const r = await fetch('/api/progress');
-    const d = await r.json();
+    if (!r.ok) return;
+    let d = null;
+    try { d = await r.json(); } catch (_) { return; }
+    if (!d || d.error) return;
     renderFileList(d.files || []);
   } catch(e) {}
 }
@@ -494,7 +593,13 @@ async function doPush(mode) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
     });
-    const d = await r.json();
+    let d = null;
+    try { d = await r.json(); } catch (_) { d = null; }
+    if (!r.ok || !d || d.error) {
+      const msg = (d && d.error) || ('HTTP ' + r.status);
+      if (statusEl) statusEl.textContent = '❌ ' + msg;
+      return;
+    }
     if (statusEl) statusEl.textContent = d.result || T('status_done');
   } catch(e) {
     if (statusEl) statusEl.textContent = '❌ ' + e;
@@ -505,9 +610,32 @@ async function doPush(mode) {
 }
 
 // ─── AUGMENTATION, MAPPING, TRAINING ──────────────
+async function startValidation() {
+  try {
+    const res = await fetch('/api/validation/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        auto_filter_failed: document.getElementById('auto-filter')?.checked || false,
+        strict_augmented_only: document.getElementById('strict-only')?.checked || false
+      })
+    });
+    let d = null;
+    try { d = await res.json(); } catch (_) { d = null; }
+    if (!res.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + res.status));
+      return;
+    }
+    const sec = _get('val-log-section'); if (sec) sec.style.display = '';
+    const badge = _get('val-status-badge'); if (badge) badge.style.display = '';
+    pollTaskStatus();
+  } catch(e) { alert((typeof T==='function'?T('status_error'):'Error') + ': ' + e); }
+}
+
 async function startAugmentation(mode = 'full') {
   if (!_lock('aug')) return;
   _augReviewIdx = 0;
+  _augReviewLoaded = false;
   const desiredDataset = (mode === 'test')
     ? 'birlashtirilgan_dataset_test_out'
     : 'birlashtirilgan_dataset_augmented';
@@ -520,14 +648,26 @@ async function startAugmentation(mode = 'full') {
         aug_prob: (function(){ const n = parseFloat(_val('aug-prob')); return (Number.isFinite(n) ? n : 0) / 100.0; })(),
         num_proc: _val('aug-num-proc'),
         skip: _checked('aug-skip-checkbox', false),
+        // Number.isFinite guard (not `|| 50`) so a literal 0% reaches the backend
+        // as 0 (barely-audible noise) instead of being coerced back to 50.
+        noise_level: (function(){ const n = parseFloat(document.getElementById('augNoiseLevel')?.value); return Number.isFinite(n) ? n : 50.0; })(),
         last_jsonl: _state_last_jsonl_for_aug || _val('hf-jsonl-path'),
         last_audio_dir: _state_last_audio_dir || _val('hf-audio-path')
       })
     });
-    const d = await res.json();
-    if (d.error) { alert(d.error); return; }
+    let d = null;
+    try { d = await res.json(); } catch (_) { d = null; }
+    if (!res.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + res.status));
+      return;
+    }
     // only mutate review dataset AFTER backend confirms success
     _augReviewDataset = desiredDataset;
+    // Reset status snapshot so prior `done` flag from a previous run does
+    // not let doAugReview hit a half-built dataset before the new worker
+    // reports running=true.
+    _augStatus = { running: true, done: false, error: '' };
+    _setAugReviewButtonsEnabled(false);
     pollTaskStatus();
   } catch(e) { alert(T('status_error') + ': ' + e); }
   finally { _unlock('aug'); }
@@ -547,8 +687,12 @@ async function startMapping() {
         num_proc:   _val('map-num-proc')
       })
     });
-    const d = await res.json();
-    if (d.error) alert(d.error);
+    let d = null;
+    try { d = await res.json(); } catch (_) { d = null; }
+    if (!res.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + res.status));
+      return;
+    }
     pollTaskStatus();
   } catch(e) { alert(T('status_error') + ': ' + e); }
   finally { _unlock('map'); }
@@ -579,31 +723,71 @@ async function startTraining() {
         resume_from_checkpoint: _checked('train-resume', true)
       })
     });
-    const d = await res.json();
-    if (d.error) alert(d.error);
+    let d = null;
+    try { d = await res.json(); } catch (_) { d = null; }
+    if (!res.ok || !d || d.error) {
+      alert((d && d.error) || ('HTTP ' + res.status));
+      return;
+    }
     pollTaskStatus();
   } catch(e) { alert(T('status_error') + ': ' + e); }
   finally { _unlock('train'); }
 }
 
 function pollTaskStatus() {
+  // Bump generation before installing a new interval. updateTaskStatus
+  // captures the current generation at request issue and discards stale
+  // responses whose generation no longer matches.
+  _taskPollGen++;
   if (!_taskPollTimer) _taskPollTimer = setInterval(updateTaskStatus, 2000);
 }
 
 async function updateTaskStatus() {
+  // Capture the generation at request time. If the timer has been cleared
+  // and re-created (new task started) before this fetch resolves, the gen
+  // will no longer match and we drop the stale response.
+  const myGen = _taskPollGen;
   try {
     const r = await fetch('/api/task_status');
+    if (myGen !== _taskPollGen) return;
+    if (!r.ok) return;
     const d = await r.json();
+    if (myGen !== _taskPollGen) return;
+    if (d.error) return;
 
     const aug = d.augmentation || {};
+    // Snapshot for doAugReview's function guard, plus button enable state.
+    _augStatus = {
+      running: !!aug.running,
+      done:    !!aug.done,
+      error:   aug.error || ''
+    };
+    // A fresh run is producing a new dataset — invalidate any prior load so the
+    // panel reloads from idx 0 when this run finishes.
+    if (_augStatus.running) _augReviewLoaded = false;
+    const _augReady = _augStatus.done && !_augStatus.running && !_augStatus.error;
+    _setAugReviewButtonsEnabled(_augReviewLoaded || _augReady);
+    // Auto-load the first result the moment augmentation finishes cleanly, so
+    // the user never has to click a nav button to see anything.
+    if (_augReady && !_augReviewLoaded) {
+      loadAugReviewInitial();
+    }
     const augBadge = _get('aug-status-badge');
     if (augBadge) {
       if (aug.running)      { augBadge.className = 'status-badge running'; _setText('aug-status-text', T('status_running')); }
       else if (aug.done)    { augBadge.className = 'status-badge done';    _setText('aug-status-text', aug.error ? T('status_error') : T('status_done')); }
       else                  { augBadge.className = 'status-badge';         _setText('aug-status-text', T('status_ready')); }
     }
-    _setText('aug-log-box', (aug.log || '') + (aug.error ? "\nError: " + aug.error : ""));
-    const alb = _get('aug-log-box'); if (alb) alb.scrollTop = 999999;
+    let logText = (aug.log || '') + (aug.error ? "\nError: " + aug.error : "");
+    if (logText.length > 200000) {
+      logText = "[...truncated...]\n" + logText.slice(-200000);
+    }
+    _setText('aug-log-box', logText);
+    const alb = _get('aug-log-box');
+    if (alb) {
+      const atBottom = alb.scrollTop + alb.clientHeight >= alb.scrollHeight - 10;
+      if (atBottom) alb.scrollTop = alb.scrollHeight;
+    }
 
     const map = d.mapping || {};
     const mapBadge = _get('map-status-badge');
@@ -625,43 +809,143 @@ async function updateTaskStatus() {
     _setText('train-log-box', (train.log || '') + (train.error ? "\nError: " + train.error : ""));
     const tlb = _get('train-log-box'); if (tlb) tlb.scrollTop = 999999;
 
-    if (!aug.running && !map.running && !train.running) {
+    const val = d.validation || {};
+    const valBadge = _get('val-status-badge');
+    const valText  = _get('val-status-text');
+    if (valBadge && (val.running || val.done)) {
+      valBadge.style.display = '';
+      const sec = _get('val-log-section'); if (sec) sec.style.display = '';
+      let cls = 'status-badge';
+      let label = 'Validation: idle';
+      if (val.running) {
+        cls = 'status-badge running';
+        label = 'Validation: running';
+      } else if (val.done) {
+        const s = (val.status || '').toLowerCase();
+        if (s === 'pass')          { cls = 'status-badge done';    label = 'Validation: PASS'; }
+        else if (s === 'fail')     { cls = 'status-badge';         label = 'Validation: FAIL'; }
+        else if (s === 'critical') { cls = 'status-badge';         label = 'Validation: CRITICAL'; }
+        else                       { cls = 'status-badge';         label = 'Validation: ' + (val.error || 'unknown'); }
+      }
+      valBadge.className = cls;
+      if (valText) valText.textContent = label;
+      // Severity color override (pass=green, fail=orange, critical=red)
+      const sev = (val.status || '').toLowerCase();
+      if (val.done) {
+        if (sev === 'pass')          valBadge.style.background = '#1e7e34';
+        else if (sev === 'fail')     valBadge.style.background = '#d97706';
+        else if (sev === 'critical') valBadge.style.background = '#b91c1c';
+        else                         valBadge.style.background = '';
+      } else {
+        valBadge.style.background = '';
+      }
+    }
+    let valLog = (val.log || '') + (val.error ? "\nError: " + val.error : "");
+    if (val.result) {
+      valLog += "\n--- RESULT_JSON ---\n" + JSON.stringify(val.result, null, 2);
+    }
+    if (valLog.length > 200000) {
+      valLog = "[...truncated...]\n" + valLog.slice(-200000);
+    }
+    _setText('val-log-box', valLog);
+    const vlb = _get('val-log-box');
+    if (vlb) {
+      const atBottom = vlb.scrollTop + vlb.clientHeight >= vlb.scrollHeight - 10;
+      if (atBottom) vlb.scrollTop = vlb.scrollHeight;
+    }
+
+    if (!aug.running && !map.running && !train.running && !val.running) {
       clearInterval(_taskPollTimer);
       _taskPollTimer = null;
+      // Bump generation so any in-flight updateTaskStatus from a prior loop
+      // is treated as stale when the next pollTaskStatus() is called.
+      _taskPollGen++;
     }
   } catch(e) {}
 }
 
-async function doAugReview(dir) {
-  _augReviewIdx += dir;
-  if (_augReviewIdx < 0) _augReviewIdx = 0;
-
+// Fetch a single review row and paint it into the panel. Pure fetch+render —
+// no index mutation, no guards — so it can be shared by both the navigation
+// handler and the automatic initial load. Returns {ok, error, data}.
+async function _fetchAndRenderAug(idx) {
   try {
-    const res = await fetch(`/api/hf_dataset_review?dataset_path=${_augReviewDataset}&idx=${_augReviewIdx}`);
-    if (!res.ok) {
-      const e = await res.json();
-      if (e.error) alert(e.error);
-      if (_augReviewIdx > 0 && dir > 0) _augReviewIdx -= 1;
-      return;
+    const res = await fetch(`/api/hf_dataset_review?dataset_path=${encodeURIComponent(_augReviewDataset)}&idx=${idx}`);
+    let d = null;
+    try { d = await res.json(); } catch (_) { d = null; }
+    if (!res.ok || !d || d.error) {
+      return { ok: false, error: (d && d.error) || ('HTTP ' + res.status), data: d };
     }
-    const d = await res.json();
-    _setText('aug-rev-idx', `${d.idx + 1} / ${d.total}`);
+    _setText('aug-rev-idx', `${(d.idx || 0) + 1} / ${d.total}`);
     const rt = _get('aug-rev-text');
     if (rt) rt.value = d.text || '';
 
     const audioEl = _get('aug-rev-audio');
     if (audioEl) {
       if (d.audio_url) {
-        audioEl.src = d.audio_url + "&t=" + new Date().getTime();
+        const sep = d.audio_url.includes('?') ? '&' : '?';
+        audioEl.src = d.audio_url + sep + 't=' + Date.now();
         audioEl.style.display = '';
         audioEl.load();
       } else {
         audioEl.style.display = 'none';
       }
     }
+    return { ok: true, data: d };
   } catch(e) {
     console.log(e);
+    return { ok: false, error: String(e) };
   }
+}
+
+async function doAugReview(dir) {
+  // Function guard: never read review endpoints while the worker is actively
+  // (re)writing the dataset — that could return half-built or stale rows.
+  // Once we've successfully rendered a row (_augReviewLoaded), the dataset is
+  // proven present, so navigation stays allowed even if the live status no
+  // longer reports done=true (e.g. after a server restart).
+  if (_augStatus.running) return;
+  if (!_augReviewLoaded && (!_augStatus.done || _augStatus.error)) return;
+
+  _augReviewIdx += dir;
+  if (_augReviewIdx < 0) _augReviewIdx = 0;
+
+  const r = await _fetchAndRenderAug(_augReviewIdx);
+  if (!r.ok) {
+    if (r.data && r.data.error) alert(r.data.error);
+    // Roll back a forward step that overran the end so idx stays in range.
+    if (_augReviewIdx > 0 && dir > 0) _augReviewIdx -= 1;
+    return;
+  }
+  _augReviewLoaded = true;
+}
+
+// Automatically populate the panel with the first result (idx 0). Called on
+// augmentation completion AND on page load: relies on the endpoint's own
+// success/error response to detect whether a completed dataset exists on disk,
+// so it stays silent (no alert, no state change) when there is nothing yet.
+async function loadAugReviewInitial() {
+  if (_augReviewLoaded) return;
+  _augReviewIdx = 0;
+  const r = await _fetchAndRenderAug(0);
+  if (r.ok) {
+    _augReviewLoaded = true;
+    _setAugReviewButtonsEnabled(true);
+  }
+}
+
+// Toggle the augmentation review buttons' enabled state from the latest
+// status snapshot. UI guard mirrors the function guard in doAugReview.
+// Selector strategy is robust to authoring style: matches inline-onclick
+// buttons, an explicit data-attribute opt-in, and a stable container scope.
+function _setAugReviewButtonsEnabled(enabled) {
+  const seen = new Set();
+  const collect = (sel) => document.querySelectorAll(sel).forEach(b => seen.add(b));
+  collect('[onclick^="doAugReview("]');
+  collect('[data-aug-review]');
+  // Container-scoped fallback — any <button> inside #aug-review-controls
+  // counts as a review control regardless of how its handler is attached.
+  collect('#aug-review-controls button, #aug-review-controls [role="button"]');
+  seen.forEach(b => { b.disabled = !enabled; });
 }
 
 // ─── INIT ─────────────────────────────────────────
@@ -709,5 +993,8 @@ loadZipList();
 
       pollTaskStatus();
     } catch(e) {}
+    // Populate the augmented-review panel on load if a completed dataset
+    // already exists on disk. Silent no-op (no alert) when there is none yet.
+    loadAugReviewInitial();
   })();
 })();

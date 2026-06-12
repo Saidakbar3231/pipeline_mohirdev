@@ -62,7 +62,8 @@ def vad_chunk(audio_info: dict,
               min_sec: float = 3.0,
               max_sec: float = 30.0,
               noise_reduce: bool = True,
-              noise_strength: float = 0.75) -> list[dict]:
+              noise_strength: float = 0.75,
+              log=None) -> list[dict]:
     """
     Bitta audio faylni VAD orqali segmentlarga qirqadi.
 
@@ -86,6 +87,9 @@ def vad_chunk(audio_info: dict,
 
     # min_sec dan qisqa fayl — o'tkazib yuborish
     if duration_s < min_sec:
+        if log:
+            log(f"[VAD_DROP] {stem} → reason: butun fayl juda qisqa "
+                f"({duration_s:.1f}s < {min_sec:.1f}s) — STT ga yetib bormaydi")
         return []
 
     # max_sec dan qisqa — qirqmasdan o'zi qaytaramiz
@@ -117,7 +121,15 @@ def vad_chunk(audio_info: dict,
             split.append(c)
 
     # Qisqalarni tashlab ketish
+    _before = len(split)
     split = [c for c in split if len(c) >= min_ms]
+    _dropped = _before - len(split)
+    if _dropped and log:
+        # Bu yo'qotish STT/filtrlardan OLDIN sodir bo'ladi — process_segment_v2
+        # logida ko'rinmaydi. Uzbek suhbat nutqida tabiiy pauzalar ko'p bo'lgani
+        # uchun bu odatda eng katta segment yo'qotish manbai.
+        log(f"[VAD_DROP] {stem} → reason: {_dropped} ta bo'lak {min_sec:.1f}s dan "
+            f"qisqa — tashlandi (STT/filtrga yetib bormaydi)")
 
     if not split:
         return []

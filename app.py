@@ -13,11 +13,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, request, jsonify, send_file, render_template, abort, session, redirect, url_for
+from werkzeug.utils import secure_filename
 from pipeline_extensions import extensions_bp
 
 from config import (
     V1_DURATION_MIN, V1_DURATION_MAX, V1_SILENCE_MAX,
-    V1_WORD_MIN, V1_REPEAT_MAX, V1_CHANGE_MAX,
+    V1_WORD_MIN, V1_REPEAT_MAX,
     V2_DURATION_MIN, V2_DURATION_MAX,
     V2_SCORE_AUTO_APPROVE, V2_SCORE_AUTO_REJECT,
     SEGMENTS_DIR, DOWNLOAD_DIR, OUTPUT_DIR,
@@ -25,11 +26,14 @@ from config import (
 
 app = Flask(__name__)
 app.register_blueprint(extensions_bp)
+
+from tab_review import register_review_routes
+register_review_routes(app)
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2 GB (folder uploads)
 app.secret_key = os.getenv("APP_SECRET_KEY", "aisha-pipeline-secret-2026")
 
 # ── PAROL HIMOYASI ─────────────────────────────────────────────
-ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "aisha2026")   # ← bu yerni o'zgartiring
+ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "mohirdev2026")
 # ──────────────────────────────────────────────────────────────
 
 UPLOAD_TMP = "uploads_tmp"
@@ -38,11 +42,41 @@ os.makedirs(SEGMENTS_DIR, exist_ok=True)
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+
+def _safe_under(target_path, *allowed_roots):
+    """
+    Path-traversal guard. Returns (abs_target, True) iff `target_path` resolves
+    inside one of `allowed_roots`. Uses os.path.commonpath rather than
+    str.startswith so sibling-prefix bypass (`/srv/app` vs `/srv/app-secrets`)
+    is rejected. All inputs are normalized via abspath/realpath first.
+    """
+    if not target_path:
+        return None, False
+    try:
+        abs_target = os.path.realpath(os.path.abspath(target_path))
+    except Exception:
+        return None, False
+    for root in allowed_roots:
+        if not root:
+            continue
+        try:
+            abs_root = os.path.realpath(os.path.abspath(root))
+        except Exception:
+            continue
+        try:
+            if os.path.commonpath([abs_target, abs_root]) == abs_root:
+                return abs_target, True
+        except ValueError:
+            # Different drives on Windows → commonpath raises; treat as outside.
+            continue
+    return abs_target, False
+
 # ═══════════════════════════════════════════════════════════════
 # GLOBAL STATE
 # ═══════════════════════════════════════════════════════════════
 _state = {
     "running": False,
+    "stopped": False,
     "log": [],
     "stats_v1": {"total": 0, "approved": 0, "pending": 0, "rejected": 0, "filtered": 0},
     "stats_v2": {"total": 0, "approved": 0, "pending": 0, "rejected": 0, "filtered": 0},
@@ -56,6 +90,8 @@ _state = {
     "progress_total": 0,
     "progress_stage": "",
 }
+_stop_requested = False
+_resume = {}
 
 
 def _log(msg: str):
@@ -70,9 +106,12 @@ def _log(msg: str):
 # PIPELINE
 # ═══════════════════════════════════════════════════════════════
 def _run_pipeline(params: dict, json_file_path: str = None):
-    global _state
+    global _state, _stop_requested, _resume
+    _stop_requested = False
+    resume_data = dict(_resume) if _resume.get("remaining_segments") else None
+    _resume.clear()
     _state = {
-        "running": True, "log": [], "done": False,
+        "running": True, "stopped": False, "log": [], "done": False,
         "stats_v1": {"total": 0, "approved": 0, "pending": 0, "rejected": 0, "filtered": 0},
         "stats_v2": {"total": 0, "approved": 0, "pending": 0, "rejected": 0, "filtered": 0},
         "notify": "", "output_files": [],
@@ -88,7 +127,7 @@ def _run_pipeline(params: dict, json_file_path: str = None):
             from audio_utils import vad_chunk
             from exporter import save_report, append_jsonl, save_all
 
-            pipeline_choice = params.get("pipeline_choice") or "Yo'l 2 — Aisha v2 Model"
+            pipeline_choice = params.get("pipeline_choice") or "Yo'l 2 — Gemini STT"
             source_type     = params.get("source_type") or "Local papka"
             gemini_api_key  = params.get("gemini_api_key") or ""
             aisha_api_key   = params.get("aisha_api_key") or ""
@@ -126,24 +165,30 @@ def _run_pipeline(params: dict, json_file_path: str = None):
 
             # Yo'l 1 filtrlari — UI togglelaridan o'qiladi (Yo'l 2 bilan bir xil pattern)
             v1_filters = {
-                "snr_min": 15.0 if params.get("filter_noisy", False) else 0.0,
+                "snr_min":      15.0 if params.get("filter_noisy", False) else 0.0,
                 "duration_min": dur_min, "duration_max": dur_max,
-                "silence_max": V1_SILENCE_MAX if params.get("filter_silence", True) else 100.0,
-                "word_min": V1_WORD_MIN,
-                "repeat_max": V1_REPEAT_MAX,
+                "silence_max":  V1_SILENCE_MAX if params.get("filter_silence", True) else 100.0,
+                "word_min":     V1_WORD_MIN,
+                "repeat_max":   V1_REPEAT_MAX,
                 "check_language": False,
-                "check_mixed":    params.get("filter_latin_only", True),
-                "check_noise":    params.get("filter_no_noise_tags", True),
-                "gemini_change_max": V1_CHANGE_MAX,
+                "check_mixed":            params.get("filter_latin_only", True),
+                "check_noise":            params.get("filter_no_noise_tags", True),
+                "filter_background_music": params.get("filter_music", True),
+                "filter_multiple_speakers": params.get("filter_multi", True),
             }
+            # Yo'l 1: lokal normalizatsiya uchun sozlamalar (Gemini yo'q)
             v1_polish = {
-                "enabled":           True,
-                "normalize_numbers": params.get("filter_num_words",   True),
-                "fix_spelling":      True,
-                "fix_punctuation":   params.get("filter_capitalize",  True),
-                "transliterate_ru":  False,
+                "normalize_numbers": params.get("filter_num_words",  True),
+                "fix_punctuation":   params.get("filter_capitalize", True),
             }
             v2_filters = {
+                # NOTE (duration wiring): Yo'l 2 intentionally uses the shared
+                # `dur_min`/`dur_max` (UI value, defaulting to V1_DURATION_MIN=3.0)
+                # — NOT config.V2_DURATION_MIN (5.0). This is deliberate: the VAD
+                # stage already enforces a 3.0s floor, so 3.0 is the single source
+                # of truth for the minimum and V2_DURATION_MIN stays unused here.
+                # Do NOT "fix" this to V2_DURATION_MIN unless you also intend to
+                # raise the effective V2 minimum from 3.0s to 5.0s.
                 "duration_min": dur_min, "duration_max": dur_max,
                 "filter_background_music":  params.get("filter_music", True),
                 "filter_multiple_speakers": params.get("filter_multi", True),
@@ -155,6 +200,11 @@ def _run_pipeline(params: dict, json_file_path: str = None):
                 "filter_no_translate":      params.get("filter_no_translate", True),
                 "filter_no_noise_tags":     params.get("filter_no_noise_tags", True),
                 "filter_no_repeat_prompt":  params.get("filter_no_repeat_prompt", True),
+                # Gemini sifat bahosi chegaralari — config.py yagona manba (single
+                # source of truth). Shu yerda uzatiladi, stt_v2 hardcoded fallbackga
+                # tushmaydi: config.py ni o'zgartirish endi pipeline'ga ta'sir qiladi.
+                "score_approve_min":        V2_SCORE_AUTO_APPROVE,
+                "score_reject_max":         V2_SCORE_AUTO_REJECT,
             }
 
             # Metadata normalizatsiya filtrlari
@@ -196,12 +246,38 @@ def _run_pipeline(params: dict, json_file_path: str = None):
             v2_out_c = os.path.join(meta_dir, f"{out_name_v2}{sfx}.csv")
             all_v1, all_v2 = [], []
 
-            if os.path.exists(SEGMENTS_DIR):
-                shutil.rmtree(SEGMENTS_DIR)
-            os.makedirs(SEGMENTS_DIR, exist_ok=True)
+            if resume_data:
+                segments      = resume_data["remaining_segments"]
+                all_v1        = resume_data.get("all_v1", [])
+                all_v2        = resume_data.get("all_v2", [])
+                do_v1         = resume_data["do_v1"]
+                do_v2         = resume_data["do_v2"]
+                fmt_jsonl     = resume_data["fmt_jsonl"]
+                fmt_csv       = resume_data["fmt_csv"]
+                selected_cols = resume_data["selected_cols"]
+                v1_filters    = resume_data["v1_filters"]
+                v2_filters    = resume_data["v2_filters"]
+                norm_filters  = resume_data["norm_filters"]
+                v1_polish     = resume_data["v1_polish"]
+                v1_out_j      = resume_data["v1_out_j"]
+                v1_out_c      = resume_data["v1_out_c"]
+                v2_out_j      = resume_data["v2_out_j"]
+                v2_out_c      = resume_data["v2_out_c"]
+                audio_out_dir = resume_data["audio_out_dir"]
+                _state["stats_v1"]         = dict(resume_data["stats_v1"])
+                _state["stats_v2"]         = dict(resume_data["stats_v2"])
+                _state["progress_total"]   = resume_data["progress_total"]
+                _state["progress_current"] = resume_data["progress_done"]
+                _state["progress_stage"]   = "Pipeline davom etmoqda..."
+                _log(f"▶️ Davom ettirilmoqda — {len(segments)} ta segment qoldi "
+                     f"({resume_data['progress_done']}/{resume_data['progress_total']})")
+            else:
+                if os.path.exists(SEGMENTS_DIR):
+                    shutil.rmtree(SEGMENTS_DIR)
+                os.makedirs(SEGMENTS_DIR, exist_ok=True)
 
             # ── V3 ──────────────────────────────────────────────
-            if do_v3:
+            if do_v3 and not resume_data:
                 if not json_file_path:
                     _log("❌ JSON fayl yuklanmagan"); return
                 try:
@@ -284,72 +360,98 @@ def _run_pipeline(params: dict, json_file_path: str = None):
                     _log(f"❌ V3 xato: {e}\n{traceback.format_exc()}")
                 return
 
-            # ── Audio yuklash ────────────────────────────────────
-            _log("🎵 Audio yuklash boshlandi...")
-            _state["progress_stage"] = "Audio yuklanmoqda..."
-            audio_items = []
+            if not resume_data:
+                # ── Audio yuklash ─────────────────────────────────
+                _log("🎵 Audio yuklash boshlandi...")
+                _state["progress_stage"] = "Audio yuklanmoqda..."
+                audio_items = []
 
-            if source_type == "YouTube URL":
-                if not yt_url.strip(): _log("❌ YouTube URL kiritilmagan"); return
-                for item in download_youtube(yt_url.strip(), _log, run_id=ts):
-                    audio_items.append(item)
-
-            elif source_type == "JSON URL fayl":
-                if not json_file_path: _log("❌ JSON fayl yuklanmagan"); return
-                try:
-                    from json_processor import extract_chunks_from_json
-                    json_chunk_dir = os.path.join(OUTPUT_DIR, "json_chunks", ts)
-                    for item in extract_chunks_from_json(json_file_path, json_chunk_dir, log_cb=_log):
+                if source_type == "YouTube URL":
+                    if not yt_url.strip(): _log("❌ YouTube URL kiritilmagan"); return
+                    for item in download_youtube(yt_url.strip(), _log, run_id=ts):
                         audio_items.append(item)
-                except Exception as e:
-                    _log(f"❌ JSON xato: {e}"); return
 
-            elif source_type == "HuggingFace Dataset":
-                if not hf_name.strip(): _log("❌ Dataset nomi kiritilmagan"); return
-                for item in download_from_huggingface(
-                    hf_name.strip(), split=hf_split or "train",
-                    audio_column=hf_audio_col or "audio",
-                    hf_token=hf_dataset_token or None,
-                    config=hf_config or None,
-                    progress_cb=_log):
-                    audio_items.append(item)
+                elif source_type == "JSON URL fayl":
+                    if not json_file_path: _log("❌ JSON fayl yuklanmagan"); return
+                    try:
+                        from json_processor import extract_chunks_from_json
+                        json_chunk_dir = os.path.join(OUTPUT_DIR, "json_chunks", ts)
+                        for item in extract_chunks_from_json(json_file_path, json_chunk_dir, log_cb=_log):
+                            audio_items.append(item)
+                    except Exception as e:
+                        _log(f"❌ JSON xato: {e}"); return
 
-            elif source_type == "Local papka":
-                raw_path = os.path.normpath(local_dir.strip().strip('"').strip("'"))
-                if not raw_path: _log("❌ Path kiritilmagan"); return
-                if os.path.isfile(raw_path):
-                    if raw_path.lower().endswith((".wav",".mp3",".ogg",".flac",".m4a")):
-                        audio_items.append({"file": raw_path, "file_name": os.path.basename(raw_path),
-                                            "source": "local", "source_url": raw_path})
-                    else: _log(f"❌ Audio fayl emas: {raw_path}"); return
-                elif os.path.isdir(raw_path):
-                    for f in sorted(os.listdir(raw_path)):
-                        if f.lower().endswith((".wav",".mp3",".ogg",".flac",".m4a")):
-                            fp = os.path.join(raw_path, f)
-                            audio_items.append({"file": fp, "file_name": f, "source": "local", "source_url": fp})
-                    if not audio_items: _log(f"❌ Papkada audio topilmadi: {raw_path}"); return
-                else: _log(f"❌ Topilmadi: {raw_path}"); return
+                elif source_type == "HuggingFace Dataset":
+                    if not hf_name.strip(): _log("❌ Dataset nomi kiritilmagan"); return
+                    for item in download_from_huggingface(
+                        hf_name.strip(), split=hf_split or "train",
+                        audio_column=hf_audio_col or "audio",
+                        hf_token=hf_dataset_token or None,
+                        config=hf_config or None,
+                        progress_cb=_log):
+                        audio_items.append(item)
 
-            _log(f"📁 {len(audio_items)} ta audio fayl topildi")
+                elif source_type == "Local papka":
+                    raw_path = os.path.normpath(local_dir.strip().strip('"').strip("'"))
+                    if not raw_path: _log("❌ Path kiritilmagan"); return
+                    if os.path.isfile(raw_path):
+                        if raw_path.lower().endswith((".wav",".mp3",".ogg",".flac",".m4a")):
+                            audio_items.append({"file": raw_path, "file_name": os.path.basename(raw_path),
+                                                "source": "local", "source_url": raw_path})
+                        else: _log(f"❌ Audio fayl emas: {raw_path}"); return
+                    elif os.path.isdir(raw_path):
+                        for f in sorted(os.listdir(raw_path)):
+                            if f.lower().endswith((".wav",".mp3",".ogg",".flac",".m4a")):
+                                fp = os.path.join(raw_path, f)
+                                audio_items.append({"file": fp, "file_name": f, "source": "local", "source_url": fp})
+                        if not audio_items: _log(f"❌ Papkada audio topilmadi: {raw_path}"); return
+                    else: _log(f"❌ Topilmadi: {raw_path}"); return
 
-            # ── VAD ─────────────────────────────────────────────
-            _log("✂️ VAD qirqilmoqda...")
-            _state["progress_stage"] = "Audio bo'linmoqda (VAD)..."
-            segments = []
-            for item in audio_items:
-                try:
-                    segs = vad_chunk(item, min_sec=dur_min, max_sec=dur_max,
-                                     noise_reduce=noise_reduce, noise_strength=noise_strength)
-                    segments.extend(segs)
-                except Exception as e:
-                    _log(f"  ⚠️ {item.get('file_name','?')}: {e}")
-            _log(f"📊 Jami {len(segments)} ta segment")
-            _state["progress_total"]   = len(segments)
-            _state["progress_current"] = 0
-            _state["progress_stage"]   = "Pipeline ishlamoqda..."
+                _log(f"📁 {len(audio_items)} ta audio fayl topildi")
+
+                # ── VAD ───────────────────────────────────────────
+                _log("✂️ VAD qirqilmoqda...")
+                _state["progress_stage"] = "Audio bo'linmoqda (VAD)..."
+                segments = []
+                for item in audio_items:
+                    try:
+                        segs = vad_chunk(item, min_sec=dur_min, max_sec=dur_max,
+                                         noise_reduce=noise_reduce, noise_strength=noise_strength,
+                                         log=_log)
+                        segments.extend(segs)
+                    except Exception as e:
+                        _log(f"  ⚠️ {item.get('file_name','?')}: {e}")
+                _log(f"📊 Jami {len(segments)} ta segment")
+                _state["progress_total"]   = len(segments)
+                _state["progress_current"] = 0
+                _state["progress_stage"]   = "Pipeline ishlamoqda..."
 
             # ── Pipeline ─────────────────────────────────────────
             for i, seg in enumerate(segments, 1):
+                if _stop_requested:
+                    _resume.update({
+                        "remaining_segments": segments[i - 1:],
+                        "all_v1": all_v1,
+                        "all_v2": all_v2,
+                        "stats_v1": dict(_state["stats_v1"]),
+                        "stats_v2": dict(_state["stats_v2"]),
+                        "do_v1": do_v1, "do_v2": do_v2,
+                        "fmt_jsonl": fmt_jsonl, "fmt_csv": fmt_csv,
+                        "selected_cols": selected_cols,
+                        "v1_filters": v1_filters, "v2_filters": v2_filters,
+                        "norm_filters": norm_filters,
+                        "v1_polish": v1_polish,
+                        "v1_out_j": v1_out_j, "v1_out_c": v1_out_c,
+                        "v2_out_j": v2_out_j, "v2_out_c": v2_out_c,
+                        "audio_out_dir": audio_out_dir,
+                        "progress_done":  _state["progress_current"],
+                        "progress_total": _state["progress_total"],
+                    })
+                    _state["stopped"] = True
+                    remaining = _state["progress_total"] - _state["progress_current"]
+                    _log(f"⏹ Pipeline to'xtatildi — {remaining} ta segment qoldi. "
+                         f"Davom ettirish uchun '▶ Davom ettirish' tugmasini bosing.")
+                    return
                 _state["progress_current"] = i
                 fname = seg.get("file_name", "?")
 
@@ -360,16 +462,18 @@ def _run_pipeline(params: dict, json_file_path: str = None):
                         res = process_segment_v1(seg.copy(), v1_filters, v1_polish, api_key=aisha_api_key)
                         # Norm filtri qo'llash
                         if res.get("status") != "filtered" and res.get("transcription"):
-                            cleaned, drop = _apply_norm_filters(res["transcription"], norm_filters)
+                            cleaned, drop, nreason = _apply_norm_filters(res["transcription"], norm_filters)
                             if drop:
                                 res["status"] = "filtered"
-                                res["reason"] = "norm: filtrdan o'tmadi"
+                                res["reason"] = f"norm: {nreason}"
+                                _log(f"[NORM_REJECT] {fname} → reason: {nreason}")
                             else:
                                 res["transcription"] = cleaned
                         st = res["status"]
                         _state["stats_v1"][st] = _state["stats_v1"].get(st, 0) + 1
                         all_v1.append(res)
-                        _state["v_results"].append(res)
+                        if st != "filtered":
+                            _state["v_results"].append(res)
                         if fmt_jsonl:
                             _append_jsonl_filtered(res, v1_out_j, selected_cols)
                         _log(f"[V1 {i}/{len(segments)}] {fname} → {st}" +
@@ -381,19 +485,21 @@ def _run_pipeline(params: dict, json_file_path: str = None):
                     from stt_v2 import process_segment_v2
                     _state["stats_v2"]["total"] += 1
                     try:
-                        res = process_segment_v2(seg.copy(), v2_filters)
+                        res = process_segment_v2(seg.copy(), v2_filters, log=_log)
                         # Norm filtri qo'llash
                         if res.get("status") != "filtered" and res.get("transcription"):
-                            cleaned, drop = _apply_norm_filters(res["transcription"], norm_filters)
+                            cleaned, drop, nreason = _apply_norm_filters(res["transcription"], norm_filters)
                             if drop:
                                 res["status"] = "filtered"
-                                res["reason"] = "norm: filtrdan o'tmadi"
+                                res["reason"] = f"norm: {nreason}"
+                                _log(f"[NORM_REJECT] {fname} → reason: {nreason}")
                             else:
                                 res["transcription"] = cleaned
                         st = res["status"]
                         _state["stats_v2"][st] = _state["stats_v2"].get(st, 0) + 1
                         all_v2.append(res)
-                        _state["v_results"].append(res)
+                        if st != "filtered":
+                            _state["v_results"].append(res)
                         if fmt_jsonl:
                             _append_jsonl_filtered(res, v2_out_j, selected_cols)
                         _log(f"[V2 {i}/{len(segments)}] {fname} → {st}" +
@@ -454,7 +560,12 @@ def _run_pipeline(params: dict, json_file_path: str = None):
 
             out_files = [p for p in [v1_out_j, v1_out_c, v2_out_j, v2_out_c] if os.path.exists(p)]
             _state["output_files"] = out_files
-            total = len(all_v1) + len(all_v2)
+            total_segs  = len(all_v1) + len(all_v2)
+            saved_count = sum(
+                1 for r in (all_v1 + all_v2)
+                if r.get("status") != "filtered"
+                and (r.get("transcription") or "").strip()
+            )
             notify_name = v1_out_j if do_v1 else v2_out_j
 
             # HF Push uchun avtomatik to'ldirish
@@ -464,15 +575,15 @@ def _run_pipeline(params: dict, json_file_path: str = None):
                                         else v2_out_c if os.path.exists(v2_out_c) else "")
             _state["last_audio_dir"] = os.path.abspath(audio_out_dir)
 
-            # Fayl hajmlarini ko'rsatish
+            # Fayl hajmlarini ko'rsatish — saqlangan yozuvlar soni
             for p in out_files:
                 size_kb = os.path.getsize(p) / 1024
-                _log(f"📄 Saqlandi: {p}  ({size_kb:.1f} KB, {total} ta yozuv)")
+                _log(f"📄 Saqlandi: {p}  ({size_kb:.1f} KB, {saved_count} ta yozuv)")
 
             _state["notify"] = (
                 f"✅ {date_s}/metadata/{os.path.basename(notify_name)}\n"
                 f"🎵 {date_s}/audios/audio_{ts}/\n"
-                f"📊 Jami: {total} ta segment"
+                f"📊 Jami: {total_segs} ta segment | ✅ Saqlangan: {saved_count} ta"
             )
             _log("🎉 Pipeline tugadi!")
 
@@ -481,7 +592,8 @@ def _run_pipeline(params: dict, json_file_path: str = None):
             _log(f"❌ Kritik xato: {e}\n{traceback.format_exc()}")
         finally:
             _state["running"] = False
-            _state["done"] = True
+            if not _state.get("stopped"):
+                _state["done"] = True
 
     threading.Thread(target=thread_fn, daemon=True).start()
 
@@ -525,13 +637,14 @@ def _num_words_uz(text: str) -> str:
 def _apply_norm_filters(text: str, norm: dict) -> tuple:
     """
     Transcription matnini normalizatsiya qiladi.
-    Returns: (cleaned_text, filtered: bool)
-    filtered=True bo'lsa segment o'chirilsin.
+    Returns: (cleaned_text, filtered: bool, reason: str)
+    filtered=True bo'lsa segment o'chirilsin; reason aniq sababni beradi
+    (UI logidagi [NORM_REJECT] satri uchun).
     """
     import re
 
     if not text or not text.strip():
-        return text, True
+        return text, True, "empty text"
 
     t = text
 
@@ -601,16 +714,16 @@ def _apply_norm_filters(text: str, norm: dict) -> tuple:
 
     # 15. Faqat raqam → filtr
     if norm.get("only_digits") and re.fullmatch(r"[\d\s.,]+", t.strip()):
-        return t, True
+        return t, True, "only digits"
 
     # 12. Kirill harflar → filtr
     if norm.get("cyrillic") and re.search(r"[а-яёА-ЯЁ]", t):
-        return t, True
+        return t, True, "cyrillic detected"
 
     if not t.strip():
-        return t, True
+        return t, True, "empty after normalization"
 
-    return t, False
+    return t, False, "ok"
 
 
 def _process_with_ref_text(segment: dict, ref_text: str,
@@ -723,6 +836,15 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/stop', methods=['POST'])
+def api_stop():
+    global _stop_requested
+    if not _state["running"]:
+        return jsonify({"error": "Pipeline ishlamayapti"}), 400
+    _stop_requested = True
+    return jsonify({"ok": True, "msg": "To'xtatilmoqda..."})
+
+
 @app.errorhandler(413)
 def _payload_too_large(e):
     limit_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
@@ -737,21 +859,42 @@ def api_start():
     if _state["running"]:
         return jsonify({"error": "Pipeline allaqachon ishlayapti"}), 400
 
-    params = {}
-    for key in request.form:
-        val = request.form[key]
-        if val == '':
-            val = None
-        elif val == 'true':
-            val = True
-        elif val == 'false':
-            val = False
-        else:
+    # Explicit schema-based parse. Heuristic int/float casting (the prior
+    # `'.' in val → float else int`) silently mutated string config — e.g.
+    # `out_name="v1.2"` would become the float 1.2 and break path joins.
+    BOOL_KEYS = {
+        "noise_reduce", "filter_music", "filter_multi", "filter_noisy",
+        "filter_silence", "filter_capitalize", "filter_num_words",
+        "filter_latin_only", "filter_no_translate", "filter_no_noise_tags",
+        "filter_no_repeat_prompt",
+        "norm_capitalize", "norm_num_words", "norm_apostrophe", "norm_duplicate",
+        "norm_punct", "norm_quotes", "norm_sentence_case", "norm_double_space",
+        "norm_clean_json", "norm_ellipsis", "norm_dash", "norm_cyrillic",
+        "norm_brackets", "norm_html", "norm_only_digits", "norm_broken_hyphen",
+        "norm_multi_comma",
+        "fmt_jsonl", "fmt_csv",
+    }
+    FLOAT_KEYS = {"dur_min", "dur_max", "noise_strength"}
+    INT_KEYS = set()  # add explicit int fields here when introduced
+
+    def _coerce(key, raw):
+        if raw == "":
+            return None
+        if key in BOOL_KEYS:
+            return raw == "true"
+        if key in FLOAT_KEYS:
             try:
-                val = float(val) if '.' in str(val) else int(val)
+                return float(raw)
             except (ValueError, TypeError):
-                pass  # keep as string
-        params[key] = val
+                return None
+        if key in INT_KEYS:
+            try:
+                return int(raw)
+            except (ValueError, TypeError):
+                return None
+        return raw  # all other fields stay as strings
+
+    params = {key: _coerce(key, request.form[key]) for key in request.form}
 
     if 'selected_cols' in request.form:
         try:
@@ -763,9 +906,13 @@ def api_start():
     if 'json_file' in request.files:
         f = request.files['json_file']
         if f and f.filename:
-            save_path = os.path.join(UPLOAD_TMP, f.filename)
-            f.save(save_path)
-            json_file_path = save_path
+            safe_name = secure_filename(f.filename) or "upload.json"
+            save_path = os.path.join(UPLOAD_TMP, safe_name)
+            abs_save, ok = _safe_under(save_path, UPLOAD_TMP)
+            if not ok:
+                return jsonify({"error": "Yuklash uchun ruxsat yo'q"}), 403
+            f.save(abs_save)
+            json_file_path = abs_save
 
     # Local folder picker: browser cannot expose absolute paths, so it sends
     # the audio files themselves. Save them to a fresh temp directory and
@@ -828,6 +975,8 @@ def api_progress():
         "files":         files_info,
         "running":       _state["running"],
         "done":          _state["done"],
+        "stopped":       _state.get("stopped", False),
+        "can_resume":    bool(_resume.get("remaining_segments")),
         "review_total":  len(_state.get("v_results",[])),
         "last_jsonl":    _state.get("last_jsonl",""),
         "last_csv":      _state.get("last_csv",""),
@@ -853,7 +1002,8 @@ def api_review():
     meta = {k: item[k] for k in ["file_name","status","reason","duration","snr_score",
                                    "silence_ratio","source","pipeline"] if item.get(k) not in (None, "")}
     return jsonify({
-        "idx": idx + 1, "total": len(results),
+        # Invariant: backend always returns 0-based idx. Frontend formats +1.
+        "idx": idx, "total": len(results),
         "transcription": item.get("transcription") or item.get("text") or "",
         "audio_url": audio_url, "file_name": item.get("file_name",""), "meta": meta,
     })
@@ -863,9 +1013,8 @@ def api_review():
 def api_audio():
     file_path = request.args.get("file","")
     if not file_path or not os.path.exists(file_path): abort(404)
-    abs_path = os.path.abspath(file_path)
-    cwd = os.path.abspath(".")
-    if not abs_path.startswith(cwd): abort(403)
+    abs_path, ok = _safe_under(file_path, ".")
+    if not ok: abort(403)
     return send_file(abs_path, mimetype="audio/wav")
 
 
@@ -873,20 +1022,25 @@ def api_audio():
 def api_download():
     file_path = request.args.get("file","")
     if not file_path or not os.path.exists(file_path): abort(404)
-    abs_path = os.path.abspath(file_path)
-    if not abs_path.startswith(os.path.abspath(".")): abort(403)
+    abs_path, ok = _safe_under(file_path, ".")
+    if not ok: abort(403)
     return send_file(abs_path, as_attachment=True, download_name=os.path.basename(abs_path))
 
 
 @app.route('/api/zip', methods=['POST'])
 def api_zip():
     # Oxirgi pipeline audio papkasini ZIP qilish
-    audio_dir = request.json.get("audio_dir", "") if request.is_json else ""
+    body = (request.get_json(silent=True) or {}) if request.is_json else {}
+    audio_dir = body.get("audio_dir", "") if isinstance(body, dict) else ""
     wav_files = []
-    if audio_dir and os.path.exists(audio_dir):
-        for fn in sorted(os.listdir(audio_dir)):
-            if fn.lower().endswith(".wav"):
-                wav_files.append(os.path.join(audio_dir, fn))
+    if audio_dir:
+        abs_dir, ok = _safe_under(audio_dir, ".")
+        if not ok:
+            return jsonify({"error": "Ruxsat yo'q (audio_dir cwd dan tashqarida)"}), 403
+        if os.path.exists(abs_dir):
+            for fn in sorted(os.listdir(abs_dir)):
+                if fn.lower().endswith(".wav"):
+                    wav_files.append(os.path.join(abs_dir, fn))
     if not wav_files:
         for root, dirs, files in os.walk(OUTPUT_DIR):
             for fn in files:
@@ -910,15 +1064,16 @@ def api_zip():
 
 @app.route('/api/delete', methods=['POST'])
 def api_delete():
-    """Fayl yoki papkani o'chirish."""
+    """Fayl yoki papkani o'chirish — faqat OUTPUT_DIR ichida."""
     data = request.json or {}
     path = data.get("path", "")
     if not path:
         return jsonify({"error": "path berilmagan"}), 400
-    abs_path = os.path.abspath(path)
-    cwd = os.path.abspath(".")
-    if not abs_path.startswith(cwd):
-        return jsonify({"error": "Ruxsat yo'q"}), 403
+    # Restrict deletes to OUTPUT_DIR. cwd-wide delete (prior behavior) would
+    # let any logged-in caller wipe source files / configs / datasets.
+    abs_path, ok = _safe_under(path, OUTPUT_DIR)
+    if not ok:
+        return jsonify({"error": "Ruxsat yo'q (faqat outputs/ ichidagi fayllar)"}), 403
     try:
         if os.path.isfile(abs_path):
             os.remove(abs_path)
@@ -959,9 +1114,15 @@ def api_hf_upload():
     f = request.files['file']
     if not f.filename:
         return jsonify({"error": "No filename"}), 400
-    save_path = os.path.join(UPLOAD_TMP, f.filename)
-    f.save(save_path)
-    return jsonify({"path": save_path, "name": f.filename})
+    safe_name = secure_filename(f.filename)
+    if not safe_name:
+        return jsonify({"error": "Invalid filename"}), 400
+    save_path = os.path.join(UPLOAD_TMP, safe_name)
+    abs_save, ok = _safe_under(save_path, UPLOAD_TMP)
+    if not ok:
+        return jsonify({"error": "Ruxsat yo'q"}), 403
+    f.save(abs_save)
+    return jsonify({"path": abs_save, "name": safe_name})
 
 
 @app.route('/api/hf/push', methods=['POST'])
@@ -974,7 +1135,9 @@ def api_hf_push():
                     data.get("file_path",""), data.get("audio_dir",""), data.get("private",True))
         return jsonify({"result": result})
     except Exception as e:
-        return jsonify({"result": f"❌ Xato: {e}"}), 500
+        # Invariant: failure returns {"error": ...}. Never put failures under
+        # the success key — frontend cannot disambiguate otherwise.
+        return jsonify({"error": f"Xato: {e}"}), 500
 
 
 @app.route('/api/audiodir')
@@ -982,7 +1145,16 @@ def api_audiodir():
     fpath = request.args.get("file","")
     if not fpath: return jsonify({"dir": ""})
     sidecar = os.path.splitext(fpath)[0] + ".audiodir"
-    return jsonify({"dir": open(sidecar).read().strip() if os.path.exists(sidecar) else ""})
+    abs_sidecar, ok = _safe_under(sidecar, OUTPUT_DIR)
+    if not ok:
+        return jsonify({"dir": ""})
+    if not os.path.exists(abs_sidecar):
+        return jsonify({"dir": ""})
+    try:
+        with open(abs_sidecar) as fh:
+            return jsonify({"dir": fh.read().strip()})
+    except Exception:
+        return jsonify({"dir": ""})
 
 
 @app.route('/api/outputs/list')
@@ -1013,7 +1185,7 @@ if __name__ == '__main__':
             pass
 
     print("\n" + "="*52)
-    print("  AIsha Pipeline - Flask Interface")
+    print("  MohirDev Pipeline - Flask Interface")
     print("  http://127.0.0.1:7861")
     print("="*52 + "\n")
     app.run(host='0.0.0.0', port=7861, debug=False, threaded=True)

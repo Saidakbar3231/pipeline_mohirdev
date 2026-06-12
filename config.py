@@ -45,7 +45,7 @@ V2_DURATION_MAX  = 30.0    # soniya
 V2_SILENCE_MAX   = 70      # %
 V2_WORD_MIN      = 5       # so'z
 V2_REPEAT_MAX    = 50      # %
-V2_SCORE_AUTO_APPROVE = 4  # va undan yuqori
+V2_SCORE_AUTO_APPROVE = 3  # va undan yuqori (3 = "o'rtacha" ham auto-approve)
 V2_SCORE_AUTO_REJECT  = 2  # va undan past
 
 # ─── Papkalar ────────────────────────────────────────────────────

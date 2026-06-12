@@ -87,15 +87,11 @@ def _build_stt_prompt(filters: dict) -> str:
         lines.append("Kulgu, shovqin, musiqa kabi tavsiflovchi teglarni yozma.")
     if filters.get("filter_no_repeat_prompt", True):
         lines.append("Bu ko'rsatmalar matnini transcription ichiga yozma.")
-    if filters.get("filter_background_music", True):
-        lines.append("Agar orqa fonda musiqa yoki kuchli fon shovqini bor bo'lsa — matn o'rniga faqat [MUSIQA_BOR] deb yoz.")
-    if filters.get("filter_multiple_speakers", True):
-        lines.append("Agar bir nechta kishi gapirsa — matn o'rniga faqat [KO'P_OVOZ] deb yoz.")
     lines.append("Agar audio tushunarsiz yoki haddan tashqari shovqinli bo'lsa — [TUSHUNARSIZ] deb yoz.")
     return "\n".join(lines)
 
 
-_KNOWN_TAGS = ("MUSIQA_BOR", "KO'P_OVOZ", "TUSHUNARSIZ")
+_KNOWN_TAGS = ("TUSHUNARSIZ",)
 
 
 def _extract_filter_tags(text: str) -> list:
